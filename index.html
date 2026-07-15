@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ferien-Tracker</title>
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🌴 Ferien-Tracker</h1>
+    <p id="current-date"></p>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="books" onclick="switchTab('books')">📚 Bücher</button>
+    <button class="tab-btn" data-tab="weight" onclick="switchTab('weight')">💪 Gewicht</button>
+    <button class="tab-btn" data-tab="fahr" onclick="switchTab('fahr')">🚗 Fahrschule</button>
+    <button class="tab-btn" data-tab="todo" onclick="switchTab('todo')">✅ To-Dos</button>
+    <button class="tab-btn" data-tab="habit" onclick="switchTab('habit')">🌱 Habits</button>
+    <button class="tab-btn" data-tab="focus" onclick="switchTab('focus')">🧠 Fokus</button>
+  </nav>
+
+  <div id="loading-note" class="loading-note">Lade deine Daten …</div>
+
+  <!-- BÜCHER TAB -->
+  <div id="tab-books" class="tab-panel active">
+    <div class="card">
+      <h2>📖 Neues Buch hinzufügen</h2>
+      <div class="form-group">
+        <input type="text" id="book-title" placeholder="Titel des Buches">
+        <input type="number" id="book-pages" placeholder="Seitenanzahl" min="1">
+        <button onclick="addBook()">Hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Deine Bibliothek</h2>
+      <div id="books-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Gelesene Seiten pro Tag</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftHistoryChart(1)">◀</button>
+        <span class="chart-range-label" id="history-range-label"></span>
+        <button class="chart-nav-btn" id="history-next-btn" onclick="shiftHistoryChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="history-chart-container"><canvas id="historyChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- GEWICHT TAB -->
+  <div id="tab-weight" class="tab-panel weight-tab">
+    <div class="card" id="weight-goal-card">
+      <h2>🎯 Ziel festlegen</h2>
+      <div class="goal-setup">
+        <div class="field">
+          <label>Startgewicht (kg)</label>
+          <input type="number" step="0.1" id="weight-start" placeholder="z.B. 78">
+        </div>
+        <div class="field">
+          <label>Zielgewicht (kg, optional)</label>
+          <input type="number" step="0.1" id="weight-goal" placeholder="z.B. 84">
+        </div>
+        <button onclick="saveWeightGoal()">Speichern</button>
+      </div>
+    </div>
+
+    <div id="weight-progress-card" class="card" style="display:none;">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">💪 Dein Fortschritt</h2>
+        <button class="ghost" onclick="resetWeightGoal()">Ziel ändern</button>
+      </div>
+      <div id="weight-streak-badge"></div>
+      <div id="weight-celebration"></div>
+      <div class="stats-row" id="weight-stats"></div>
+      <div class="progress-container">
+        <div class="progress-bar weight-bar" id="weight-progress-bar"></div>
+        <div class="progress-text" id="weight-progress-text"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>➕ Neuer Eintrag</h2>
+      <div class="form-group">
+        <input type="date" id="weight-date">
+        <input type="number" step="0.1" id="weight-value" placeholder="Gewicht in kg">
+        <button onclick="addWeightEntry()">Eintragen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Gewichtsverlauf</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftWeightChart(1)">◀</button>
+        <span class="chart-range-label" id="weight-range-label"></span>
+        <button class="chart-nav-btn" id="weight-next-btn" onclick="shiftWeightChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="weight-chart-container"><canvas id="weightChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- FAHRSCHULE TAB -->
+  <div id="tab-fahr" class="tab-panel fahr-tab">
+    <div class="card">
+      <h2>🚗 Fragenkatalog</h2>
+      <div class="form-group">
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:150px;">
+          <label style="font-size:12px; color:var(--text-muted);">Fragen insgesamt</label>
+          <input type="number" id="fahr-total" placeholder="z.B. 1074">
+        </div>
+        <button onclick="saveFahrTotal()">Speichern</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">📈 Dein Fortschritt</h2>
+      </div>
+      <div id="fahr-streak-badge"></div>
+      <div id="fahr-celebration"></div>
+      <div class="stats-row" id="fahr-stats"></div>
+      <div class="progress-container">
+        <div class="progress-bar fahr-bar" id="fahr-progress-bar"></div>
+        <div class="progress-text" id="fahr-progress-text"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>➕ Fragen geübt</h2>
+      <div class="form-group" style="margin-bottom:12px;">
+        <button class="quick" onclick="addFahrDone(1)">+1</button>
+        <button class="quick" onclick="addFahrDone(5)">+5</button>
+        <button class="quick" onclick="addFahrDone(10)">+10</button>
+        <button class="quick" onclick="addFahrDone(20)">+20</button>
+      </div>
+      <div class="form-group">
+        <input type="number" id="fahr-custom" placeholder="eigene Anzahl">
+        <button onclick="addFahrCustom()">Hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Geübte Fragen pro Tag</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftFahrChart(1)">◀</button>
+        <span class="chart-range-label" id="fahr-range-label"></span>
+        <button class="chart-nav-btn" id="fahr-next-btn" onclick="shiftFahrChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="fahr-chart-container"><canvas id="fahrChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TO-DOS / KALENDER TAB -->
+  <div id="tab-todo" class="tab-panel todo-tab">
+    <div class="card">
+      <div class="calendar-nav">
+        <button class="ghost" onclick="changeMonth(-1)">← Vorheriger</button>
+        <span class="month-label" id="calendar-month-label"></span>
+        <button class="ghost" onclick="changeMonth(1)">Nächster →</button>
+      </div>
+      <div id="todo-streak-badge"></div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">📝 Aufgaben</h2>
+      </div>
+      <div class="selected-date-label" id="selected-date-label"></div>
+      <div class="form-group">
+        <input type="text" id="todo-text" placeholder="Was steht an?">
+        <button onclick="addTodo()">Hinzufügen</button>
+      </div>
+      <div class="todo-list" id="todo-list"></div>
+    </div>
+  </div>
+
+  <!-- HABITS TAB -->
+  <div id="tab-habit" class="tab-panel habit-tab">
+    <div class="card">
+      <h2>✅ Positive Gewohnheiten</h2>
+      <div class="form-group">
+        <input type="text" id="good-habit-name" placeholder="z.B. 10.000 Schritte gehen">
+        <button onclick="addGoodHabit()">Hinzufügen</button>
+      </div>
+      <div class="todo-list" id="good-habits-list" style="margin-top:16px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>🚫 Schlechte Gewohnheiten loswerden</h2>
+      <div class="form-group">
+        <input type="text" id="bad-habit-name" placeholder="z.B. weniger Social Media">
+        <button onclick="addBadHabit()">Hinzufügen</button>
+      </div>
+      <div class="todo-list" id="bad-habits-list" style="margin-top:16px;"></div>
+    </div>
+  </div>
+
+  <!-- FOKUS TAB -->
+  <div id="tab-focus" class="tab-panel focus-tab">
+    <div class="card">
+      <h2>⏱️ Pomodoro-Timer (25 / 5)</h2>
+      <div class="focus-phase-label" id="focus-phase-label">Fokus</div>
+      <div class="focus-timer-display" id="focus-timer-display">25:00</div>
+      <div id="focus-phase-banner"></div>
+      <div class="form-group" style="margin-bottom:12px;">
+        <button id="focus-timer-btn" onclick="toggleFocusTimer()">Start</button>
+        <button class="ghost" onclick="skipFocusPhase()">Überspringen</button>
+        <button class="ghost" onclick="resetFocusTimer()">Zurücksetzen</button>
+      </div>
+      <div class="form-group">
+        <input type="number" id="focus-manual-minutes" placeholder="oder manuell: Minuten">
+        <button onclick="addFocusManual()">Hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-between"><h2 style="margin-bottom:0;">📊 Dein Fokus</h2></div>
+      <div id="focus-streak-badge"></div>
+      <div class="stats-row" id="focus-stats"></div>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftFocusChart(1)">◀</button>
+        <span class="chart-range-label" id="focus-range-label"></span>
+        <button class="chart-nav-btn" id="focus-next-btn" onclick="shiftFocusChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="focus-chart-container"><canvas id="focusChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>🎮 Zeitbudget fürs Zocken</h2>
+      <div class="form-group">
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:150px;">
+          <label style="font-size:12px; color:var(--text-muted);">Tageslimit (Minuten)</label>
+          <input type="number" id="game-budget" placeholder="z.B. 60">
+        </div>
+        <button onclick="saveGameBudget()">Speichern</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-between"><h2 style="margin-bottom:0;">Heute gezockt</h2></div>
+      <div id="game-streak-badge"></div>
+      <div class="stats-row" id="game-stats"></div>
+      <div class="progress-container">
+        <div class="progress-bar game-bar" id="game-progress-bar"></div>
+        <div class="progress-text" id="game-progress-text"></div>
+      </div>
+      <div class="form-group" style="margin-top:16px; margin-bottom:12px;">
+        <button class="quick" onclick="addGameMinutes(15)">+15 Min</button>
+        <button class="quick" onclick="addGameMinutes(30)">+30 Min</button>
+        <button class="quick" onclick="addGameMinutes(60)">+60 Min</button>
+      </div>
+      <div class="form-group">
+        <input type="number" id="game-custom" placeholder="eigene Minuten">
+        <button onclick="addGameCustom()">Hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Verlauf</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftGameChart(1)">◀</button>
+        <span class="chart-range-label" id="game-range-label"></span>
+        <button class="chart-nav-btn" id="game-next-btn" onclick="shiftGameChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="game-chart-container"><canvas id="gameChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
