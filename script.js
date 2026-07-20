@@ -4,6 +4,7 @@ let readingHistory = {};
 let weightData = { start: null, goal: null, entries: [] };
 let fahrData = { total: 1074, done: 0, history: {} };
 let todosData = {}; // { "YYYY-MM-DD": [{ id, text, done }] }
+let generalTodos = []; // [{ id, text, done }] - Gesamtübersicht, unabhängig vom Kalender
 let habitsData = { good: [], bad: [] };
 // good: [{ id, name, history: {date:true} }]
 // bad:  [{ id, name, startDate, lastRelapse, best }]
@@ -165,6 +166,11 @@ function loadAll(){
   } catch(e){ console.error('Konnte To-Do-Daten nicht laden', e); }
 
   try{
+    const gt = localStorage.getItem('general-todo-data');
+    if(gt){ generalTodos = JSON.parse(gt); }
+  } catch(e){ console.error('Konnte Aufgabenliste nicht laden', e); }
+
+  try{
     const h = localStorage.getItem('habits-data');
     if(h){ habitsData = JSON.parse(h); }
   } catch(e){ console.error('Konnte Habit-Daten nicht laden', e); }
@@ -186,6 +192,7 @@ function loadAll(){
   renderWeight();
   renderFahr();
   renderTodo();
+  renderGeneralTodos();
   renderHabits();
   renderFocus();
   renderGame();
@@ -206,6 +213,10 @@ function saveFahrData(){
 function saveTodoData(){
   try{ localStorage.setItem('todo-data', JSON.stringify(todosData)); }
   catch(e){ console.error('Speichern fehlgeschlagen (To-Dos)', e); }
+}
+function saveGeneralTodosData(){
+  try{ localStorage.setItem('general-todo-data', JSON.stringify(generalTodos)); }
+  catch(e){ console.error('Speichern fehlgeschlagen (Aufgabenliste)', e); }
 }
 function saveHabitsData(){
   try{ localStorage.setItem('habits-data', JSON.stringify(habitsData)); }
@@ -260,7 +271,6 @@ function renderBooks(){
 
   saveBooksData();
   updateHistoryChart();
-  renderLevelBar();
 }
 
 function addBook(){
@@ -380,7 +390,6 @@ function renderWeight(){
 
   saveWeightData();
   updateWeightChart();
-  renderLevelBar();
 }
 
 function saveWeightGoal(){
@@ -498,7 +507,6 @@ function renderFahr(){
 
   saveFahrData();
   updateFahrChart();
-  renderLevelBar();
 }
 
 function saveFahrTotal(){
@@ -622,7 +630,6 @@ function renderTodo(){
     : '';
 
   saveTodoData();
-  renderLevelBar();
 }
 
 function renderTodoList(){
@@ -670,6 +677,53 @@ function deleteTodo(id){
   const items = todosData[selectedDate] || [];
   todosData[selectedDate] = items.filter(t => t.id !== id);
   renderTodo();
+}
+
+/* ================= GESAMT-AUFGABENLISTE (unabhängig vom Kalender) ================= */
+function renderGeneralTodos(){
+  const list = document.getElementById('general-todo-list');
+  const summary = document.getElementById('general-todo-summary');
+
+  const doneCount = generalTodos.filter(t => t.done).length;
+  summary.innerText = generalTodos.length
+    ? `${doneCount} von ${generalTodos.length} erledigt`
+    : '';
+
+  if(generalTodos.length === 0){
+    list.innerHTML = '<p class="empty-state">Noch nichts auf der Liste – trag ein, was insgesamt ansteht.</p>';
+    saveGeneralTodosData();
+    return;
+  }
+
+  list.innerHTML = generalTodos.map(item => `
+    <div class="todo-item ${item.done ? 'done' : ''}">
+      <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleGeneralTodo('${item.id}')">
+      <span class="todo-text">${item.text}</span>
+      <button class="delete-btn" onclick="deleteGeneralTodo('${item.id}')">Löschen</button>
+    </div>
+  `).join('');
+
+  saveGeneralTodosData();
+}
+
+function addGeneralTodo(){
+  const input = document.getElementById('general-todo-text');
+  const text = input.value.trim();
+  if(!text) return;
+  generalTodos.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), text, done: false });
+  input.value = '';
+  renderGeneralTodos();
+}
+
+function toggleGeneralTodo(id){
+  const item = generalTodos.find(t => t.id === id);
+  if(item) item.done = !item.done;
+  renderGeneralTodos();
+}
+
+function deleteGeneralTodo(id){
+  generalTodos = generalTodos.filter(t => t.id !== id);
+  renderGeneralTodos();
 }
 
 /* ================= HABITS ================= */
@@ -766,7 +820,6 @@ function renderHabits(){
   renderGoodHabits();
   renderBadHabits();
   saveHabitsData();
-  renderLevelBar();
 }
 
 function renderGoodHabits(){
@@ -1116,7 +1169,6 @@ function renderFocus(){
 
   updateFocusChart();
   saveFocusData();
-  renderLevelBar();
 }
 
 function updateFocusChart(){
@@ -1228,7 +1280,6 @@ function renderGame(){
 
   updateGameChart();
   saveGameData();
-  renderLevelBar();
 }
 
 function updateGameChart(){
@@ -1286,87 +1337,6 @@ function chartOptions(){
   };
 }
 
-/* ================= LEVEL-SYSTEM (Gesamt-Fortschritt) ================= */
-/* Fasst Fortschritt aus allen Bereichen zu einem gemeinsamen XP-Wert zusammen.
-   Basiert bewusst auf kumulativen, nie sinkenden Werten (Gesamtseiten, Gesamt-
-   Fragen, Rekorde, ...) statt auf aktuellen Streaks, damit das Level nicht
-   einfach wieder runtergeht, nur weil man mal einen Tag ausgesetzt hat. */
-function computeTotalXP(){
-  let xp = 0;
-
-  // Bücher: 1 XP pro gelesener Seite (insgesamt, über die ganze Historie)
-  xp += Object.values(readingHistory).reduce((a, b) => a + b, 0) * 1;
-
-  // Gewicht: 15 XP pro geloggtem Eintrag (belohnt Konsequenz beim Tracken)
-  xp += weightData.entries.length * 15;
-
-  // Fahrschule: 2 XP pro geübter Frage
-  xp += (fahrData.done || 0) * 2;
-
-  // To-Dos: 5 XP pro erledigter Aufgabe
-  let doneTodos = 0;
-  Object.values(todosData).forEach(items => {
-    items.forEach(item => { if(item.done) doneTodos++; });
-  });
-  xp += doneTodos * 5;
-
-  // Positive Gewohnheiten: 10 XP pro abgehaktem Tag + 25 XP pro Streak-Rekord
-  habitsData.good.forEach(h => {
-    const checkedDays = Object.values(h.history || {}).filter(Boolean).length;
-    xp += checkedDays * 10;
-    xp += (h.best || 0) * 25;
-  });
-
-  // Schlechte Gewohnheiten: 25 XP pro Tag des bisherigen Rekords ("clean")
-  habitsData.bad.forEach(h => {
-    xp += (h.best || 0) * 25;
-  });
-
-  // Fokus: 2 XP pro fokussierter Minute
-  xp += Object.values(focusData.history).reduce((a, b) => a + b, 0) * 2;
-
-  // Zocken-Budget: 5 XP pro Tag, an dem das Limit eingehalten wurde
-  let budgetDays = 0;
-  Object.entries(gameData.history).forEach(([date, minutes]) => {
-    if(minutes <= gameData.budget) budgetDays++;
-  });
-  xp += budgetDays * 5;
-
-  return Math.round(xp);
-}
-
-/* Steigende Anforderung pro Level (Level 1→2 braucht 100 XP, 2→3 braucht 200, ...) */
-function computeLevelInfo(xp){
-  let level = 1;
-  let remaining = xp;
-  let req = 100;
-  const MAX_LEVEL = 500; // Sicherheitsgrenze
-  while(remaining >= req && level < MAX_LEVEL){
-    remaining -= req;
-    level++;
-    req = 100 * level;
-  }
-  const percent = req > 0 ? Math.min(100, Math.round((remaining / req) * 100)) : 0;
-  return { level, xpIntoLevel: remaining, xpForNext: req, percent };
-}
-
-function getLevelTitle(level){
-  if(level >= 20) return '🏆 Legende';
-  if(level >= 15) return '💎 Unaufhaltsam';
-  if(level >= 10) return '🔥 Eisern';
-  if(level >= 6) return '⚡ Motiviert';
-  if(level >= 3) return '🌱 Im Aufbau';
-  return '🐣 Anfänger';
-}
-
-function renderLevelBar(){
-  const xp = computeTotalXP();
-  const { level, xpIntoLevel, xpForNext, percent } = computeLevelInfo(xp);
-  document.getElementById('level-title').innerText = `Level ${level} – ${getLevelTitle(level)}`;
-  document.getElementById('level-xp-text').innerText = `${xpIntoLevel} / ${xpForNext} XP · insgesamt ${xp} XP`;
-  document.getElementById('level-progress-bar').style.width = percent + '%';
-}
-
 /* ================= BACKUP-ERINNERUNG ================= */
 function checkBackupReminder(){
   let referenceDate = localStorage.getItem('last-backup-date');
@@ -1399,7 +1369,7 @@ function dismissBackupReminder(){
 }
 
 /* ================= BACKUP (Export / Import) ================= */
-const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'habits-data', 'focus-data', 'game-data'];
+const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'habits-data', 'focus-data', 'game-data'];
 
 function showBackupStatus(msg, isError){
   const el = document.getElementById('backup-status');
