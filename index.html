@@ -22,16 +22,6 @@
     <p id="current-date"></p>
   </header>
 
-  <div class="level-bar">
-    <div class="level-header">
-      <span class="level-title" id="level-title">Level 1 – 🐣 Anfänger</span>
-      <span class="level-xp-text" id="level-xp-text"></span>
-    </div>
-    <div class="progress-container level-progress-container">
-      <div class="progress-bar level-progress-bar" id="level-progress-bar"></div>
-    </div>
-  </div>
-
   <div id="backup-reminder-banner" class="backup-reminder-banner"></div>
 
   <div class="backup-bar">
@@ -183,6 +173,19 @@
 
   <!-- TO-DOS / KALENDER TAB -->
   <div id="tab-todo" class="tab-panel todo-tab">
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">📋 Meine Aufgabenliste</h2>
+      </div>
+      <p class="selected-date-label">Alles, was du dir insgesamt vorgenommen hast – unabhängig von einem bestimmten Tag.</p>
+      <div class="form-group">
+        <input type="text" id="general-todo-text" placeholder="Was steht insgesamt an?">
+        <button onclick="addGeneralTodo()">Hinzufügen</button>
+      </div>
+      <div id="general-todo-summary" class="selected-date-label"></div>
+      <div class="todo-list" id="general-todo-list" style="margin-top:12px;"></div>
+    </div>
+
     <div class="card">
       <div class="calendar-nav">
         <button class="ghost" onclick="changeMonth(-1)">← Vorheriger</button>
