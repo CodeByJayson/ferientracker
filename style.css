@@ -56,30 +56,6 @@
   #backup-status.success{ color:#6ee7b7; }
   #backup-status.error{ color:var(--danger-color); }
 
-  /* Level bar */
-  .level-bar{
-    background:linear-gradient(135deg, rgba(245,158,11,.14), rgba(99,102,241,.10));
-    border:1px solid rgba(245,158,11,.35);
-    border-radius:14px;
-    padding:16px 20px;
-    margin-bottom:16px;
-  }
-  .level-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    flex-wrap:wrap;
-    gap:8px;
-    margin-bottom:10px;
-  }
-  .level-title{ font-weight:800; font-size:1.05rem; color:#fbbf24; }
-  .level-xp-text{ font-size:12px; color:var(--text-muted); font-weight:600; }
-  .level-progress-container{ height:16px; margin-bottom:0; }
-  .level-progress-bar{
-    background:linear-gradient(90deg, #f59e0b, #fbbf24);
-    height:100%;
-  }
-
   /* Backup reminder banner */
   .backup-reminder-banner{
     display:none;
