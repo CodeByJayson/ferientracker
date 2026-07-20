@@ -180,6 +180,8 @@ function loadAll(){
   } catch(e){ console.error('Konnte Zocken-Daten nicht laden', e); }
 
   document.getElementById('loading-note').style.display = 'none';
+  autoApplyMissedJokers();
+  checkBackupReminder();
   renderBooks();
   renderWeight();
   renderFahr();
@@ -258,6 +260,7 @@ function renderBooks(){
 
   saveBooksData();
   updateHistoryChart();
+  renderLevelBar();
 }
 
 function addBook(){
@@ -377,6 +380,7 @@ function renderWeight(){
 
   saveWeightData();
   updateWeightChart();
+  renderLevelBar();
 }
 
 function saveWeightGoal(){
@@ -494,6 +498,7 @@ function renderFahr(){
 
   saveFahrData();
   updateFahrChart();
+  renderLevelBar();
 }
 
 function saveFahrTotal(){
@@ -617,6 +622,7 @@ function renderTodo(){
     : '';
 
   saveTodoData();
+  renderLevelBar();
 }
 
 function renderTodoList(){
@@ -676,10 +682,91 @@ function daysSince(dateStr){
   return Math.round((today - then) / 86400000);
 }
 
+/* Monday of the week a given "YYYY-MM-DD" date falls into - used to limit the joker to once per week */
+function getWeekKey(dateStr){
+  const [y,m,d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m-1, d);
+  const day = date.getDay(); // 0=Sun..6=Sat
+  const diffToMonday = (day === 0 ? -6 : 1 - day);
+  date.setDate(date.getDate() + diffToMonday);
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+/* Streak for good habits: a day counts if it was checked off OR it was used as a
+   weekly "Joker" (skip) day. If a day is neither, the streak stops there - so the
+   day right after a Joker day still has to be a real check-off. */
+function computeGoodHabitStreak(habit){
+  const history = habit.history || {};
+  const freeDays = new Set(habit.freeDays || []);
+  const satisfied = key => !!history[key] || freeDays.has(key);
+
+  const todayKey = getTodayKey();
+  let streak = 0;
+  let cursor = new Date();
+  if(!satisfied(todayKey)) cursor.setDate(cursor.getDate() - 1);
+
+  const MAX_DAYS = 3650; // safety cap, never loop forever
+  for(let i = 0; i < MAX_DAYS; i++){
+    const key = `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`;
+    if(satisfied(key)){
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  return streak;
+}
+
+/* Wird beim Laden aufgerufen: Wenn der GESTRIGE Tag nicht abgehakt wurde und
+   der Wochen-Joker für diese Woche noch frei ist, wird er automatisch verbraucht -
+   so geht der Streak nicht kaputt, nur weil man vergessen hat, ihn manuell zu klicken. */
+function autoApplyMissedJokers(){
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yKey = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+
+  habitsData.good.forEach(h => {
+    if(!h.freeDays) h.freeDays = [];
+    if(h.history[yKey]) return; // gestern wurde erledigt, nichts zu tun
+    if(h.freeDays.includes(yKey)) return; // schon abgedeckt
+    if(h.createdDate && yKey < h.createdDate) return; // Gewohnheit gab es damals noch nicht
+
+    const weekKey = getWeekKey(yKey);
+    const usedThisWeek = h.freeDays.some(d => getWeekKey(d) === weekKey);
+    if(usedThisWeek) return; // Joker diese Woche schon verbraucht
+
+    h.freeDays.push(yKey);
+  });
+}
+
+function canUseJoker(habit){
+  const todayKey = getTodayKey();
+  if(habit.history[todayKey]) return false; // already done today, no need
+  const freeDays = habit.freeDays || [];
+  if(freeDays.includes(todayKey)) return false; // already used today
+  const thisWeek = getWeekKey(todayKey);
+  const usedThisWeek = freeDays.some(d => getWeekKey(d) === thisWeek);
+  return !usedThisWeek;
+}
+
+function useJoker(id){
+  const habit = habitsData.good.find(h => h.id === id);
+  if(!habit) return;
+  if(!habit.freeDays) habit.freeDays = [];
+  if(!canUseJoker(habit)) return;
+  habit.freeDays.push(getTodayKey());
+  renderHabits();
+}
+
+let editingGoodId = null;
+let editingBadId = null;
+
 function renderHabits(){
   renderGoodHabits();
   renderBadHabits();
   saveHabitsData();
+  renderLevelBar();
 }
 
 function renderGoodHabits(){
@@ -689,17 +776,41 @@ function renderGoodHabits(){
     return;
   }
   const todayKey = getTodayKey();
-  list.innerHTML = habitsData.good.map(h => {
+  list.innerHTML = habitsData.good.map((h, index) => {
+    if(h.id === editingGoodId){
+      return `
+        <div class="habit-item">
+          <div class="habit-edit-form">
+            <input type="text" id="edit-good-name-${h.id}" value="${h.name}">
+            <input type="time" id="edit-good-time-${h.id}" value="${h.time || ''}">
+          </div>
+          <button onclick="saveEditGoodHabit('${h.id}')">Speichern</button>
+          <button class="ghost" onclick="cancelEditGoodHabit()">Abbrechen</button>
+        </div>
+      `;
+    }
+
     const doneToday = !!h.history[todayKey];
-    const streak = computeStreak(h.history);
+    const streak = computeGoodHabitStreak(h);
+    h.best = Math.max(h.best || 0, streak);
+    const jokerAvailable = canUseJoker(h);
+
     return `
       <div class="habit-item">
+        <div class="habit-order-btns">
+          <button onclick="moveGoodHabit('${h.id}', -1)" ${index === 0 ? 'disabled' : ''}>▲</button>
+          <button onclick="moveGoodHabit('${h.id}', 1)" ${index === habitsData.good.length - 1 ? 'disabled' : ''}>▼</button>
+        </div>
         <div class="habit-check">
           <input type="checkbox" ${doneToday ? 'checked' : ''} onchange="toggleGoodHabit('${h.id}')">
           <span>Heute</span>
         </div>
         <span class="habit-name">${h.name}</span>
+        ${h.time ? `<span class="habit-time">⏰ ${h.time}</span>` : ''}
         <span class="habit-streak">🔥 ${streak} Tag${streak===1?'':'e'}</span>
+        <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
+        <button class="joker-btn" onclick="useJoker('${h.id}')" ${jokerAvailable ? '' : 'disabled'} title="1x pro Woche einen Tag aussetzen, ohne den Streak zu verlieren">Joker</button>
+        <button class="edit-btn" onclick="startEditGoodHabit('${h.id}')">Bearbeiten</button>
         <button class="delete-btn" onclick="deleteGoodHabit('${h.id}')">Löschen</button>
       </div>
     `;
@@ -712,16 +823,36 @@ function renderBadHabits(){
     list.innerHTML = '<p class="empty-state">Noch keine schlechte Gewohnheit hinzugefügt.</p>';
     return;
   }
-  list.innerHTML = habitsData.bad.map(h => {
+  list.innerHTML = habitsData.bad.map((h, index) => {
+    if(h.id === editingBadId){
+      return `
+        <div class="habit-item">
+          <div class="habit-edit-form">
+            <input type="text" id="edit-bad-name-${h.id}" value="${h.name}">
+            <input type="time" id="edit-bad-time-${h.id}" value="${h.time || ''}">
+          </div>
+          <button onclick="saveEditBadHabit('${h.id}')">Speichern</button>
+          <button class="ghost" onclick="cancelEditBadHabit()">Abbrechen</button>
+        </div>
+      `;
+    }
+
     const cleanSince = h.lastRelapse || h.startDate;
     const streak = daysSince(cleanSince);
-    const best = Math.max(h.best || 0, streak);
+    h.best = Math.max(h.best || 0, streak);
+
     return `
       <div class="habit-item">
+        <div class="habit-order-btns">
+          <button onclick="moveBadHabit('${h.id}', -1)" ${index === 0 ? 'disabled' : ''}>▲</button>
+          <button onclick="moveBadHabit('${h.id}', 1)" ${index === habitsData.bad.length - 1 ? 'disabled' : ''}>▼</button>
+        </div>
         <span class="habit-name">${h.name}</span>
+        ${h.time ? `<span class="habit-time">⏰ ${h.time}</span>` : ''}
         <span class="habit-stat"><b>${streak}</b> Tag${streak===1?'':'e'} sauber</span>
-        <span class="habit-stat">🏆 Rekord: <b>${best}</b></span>
+        <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
         <button class="relapse-btn" onclick="reportRelapse('${h.id}')">Rückfall melden</button>
+        <button class="edit-btn" onclick="startEditBadHabit('${h.id}')">Bearbeiten</button>
         <button class="delete-btn" onclick="deleteBadHabit('${h.id}')">Löschen</button>
       </div>
     `;
@@ -730,10 +861,16 @@ function renderBadHabits(){
 
 function addGoodHabit(){
   const input = document.getElementById('good-habit-name');
+  const timeInput = document.getElementById('good-habit-time');
   const name = input.value.trim();
   if(!name) return;
-  habitsData.good.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), name, history: {} });
+  habitsData.good.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    name, time: timeInput.value || null, history: {}, best: 0, freeDays: [],
+    createdDate: getTodayKey()
+  });
   input.value = '';
+  timeInput.value = '';
   renderHabits();
 }
 
@@ -751,15 +888,51 @@ function deleteGoodHabit(id){
   renderHabits();
 }
 
+function moveGoodHabit(id, direction){
+  const arr = habitsData.good;
+  const idx = arr.findIndex(h => h.id === id);
+  const newIdx = idx + direction;
+  if(idx === -1 || newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  renderHabits();
+}
+
+function startEditGoodHabit(id){
+  editingGoodId = id;
+  renderHabits();
+}
+
+function cancelEditGoodHabit(){
+  editingGoodId = null;
+  renderHabits();
+}
+
+function saveEditGoodHabit(id){
+  const habit = habitsData.good.find(h => h.id === id);
+  if(!habit) return;
+  const name = document.getElementById(`edit-good-name-${id}`).value.trim();
+  const time = document.getElementById(`edit-good-time-${id}`).value;
+  if(!name){
+    alert('Der Name darf nicht leer sein.');
+    return;
+  }
+  habit.name = name;
+  habit.time = time || null;
+  editingGoodId = null;
+  renderHabits();
+}
+
 function addBadHabit(){
   const input = document.getElementById('bad-habit-name');
+  const timeInput = document.getElementById('bad-habit-time');
   const name = input.value.trim();
   if(!name) return;
   habitsData.bad.push({
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-    name, startDate: getTodayKey(), lastRelapse: null, best: 0
+    name, time: timeInput.value || null, startDate: getTodayKey(), lastRelapse: null, best: 0
   });
   input.value = '';
+  timeInput.value = '';
   renderHabits();
 }
 
@@ -775,6 +948,40 @@ function reportRelapse(id){
 
 function deleteBadHabit(id){
   habitsData.bad = habitsData.bad.filter(h => h.id !== id);
+  renderHabits();
+}
+
+function moveBadHabit(id, direction){
+  const arr = habitsData.bad;
+  const idx = arr.findIndex(h => h.id === id);
+  const newIdx = idx + direction;
+  if(idx === -1 || newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  renderHabits();
+}
+
+function startEditBadHabit(id){
+  editingBadId = id;
+  renderHabits();
+}
+
+function cancelEditBadHabit(){
+  editingBadId = null;
+  renderHabits();
+}
+
+function saveEditBadHabit(id){
+  const habit = habitsData.bad.find(h => h.id === id);
+  if(!habit) return;
+  const name = document.getElementById(`edit-bad-name-${id}`).value.trim();
+  const time = document.getElementById(`edit-bad-time-${id}`).value;
+  if(!name){
+    alert('Der Name darf nicht leer sein.');
+    return;
+  }
+  habit.name = name;
+  habit.time = time || null;
+  editingBadId = null;
   renderHabits();
 }
 
@@ -909,6 +1116,7 @@ function renderFocus(){
 
   updateFocusChart();
   saveFocusData();
+  renderLevelBar();
 }
 
 function updateFocusChart(){
@@ -1020,6 +1228,7 @@ function renderGame(){
 
   updateGameChart();
   saveGameData();
+  renderLevelBar();
 }
 
 function updateGameChart(){
@@ -1075,6 +1284,191 @@ function chartOptions(){
       }
     }
   };
+}
+
+/* ================= LEVEL-SYSTEM (Gesamt-Fortschritt) ================= */
+/* Fasst Fortschritt aus allen Bereichen zu einem gemeinsamen XP-Wert zusammen.
+   Basiert bewusst auf kumulativen, nie sinkenden Werten (Gesamtseiten, Gesamt-
+   Fragen, Rekorde, ...) statt auf aktuellen Streaks, damit das Level nicht
+   einfach wieder runtergeht, nur weil man mal einen Tag ausgesetzt hat. */
+function computeTotalXP(){
+  let xp = 0;
+
+  // Bücher: 1 XP pro gelesener Seite (insgesamt, über die ganze Historie)
+  xp += Object.values(readingHistory).reduce((a, b) => a + b, 0) * 1;
+
+  // Gewicht: 15 XP pro geloggtem Eintrag (belohnt Konsequenz beim Tracken)
+  xp += weightData.entries.length * 15;
+
+  // Fahrschule: 2 XP pro geübter Frage
+  xp += (fahrData.done || 0) * 2;
+
+  // To-Dos: 5 XP pro erledigter Aufgabe
+  let doneTodos = 0;
+  Object.values(todosData).forEach(items => {
+    items.forEach(item => { if(item.done) doneTodos++; });
+  });
+  xp += doneTodos * 5;
+
+  // Positive Gewohnheiten: 10 XP pro abgehaktem Tag + 25 XP pro Streak-Rekord
+  habitsData.good.forEach(h => {
+    const checkedDays = Object.values(h.history || {}).filter(Boolean).length;
+    xp += checkedDays * 10;
+    xp += (h.best || 0) * 25;
+  });
+
+  // Schlechte Gewohnheiten: 25 XP pro Tag des bisherigen Rekords ("clean")
+  habitsData.bad.forEach(h => {
+    xp += (h.best || 0) * 25;
+  });
+
+  // Fokus: 2 XP pro fokussierter Minute
+  xp += Object.values(focusData.history).reduce((a, b) => a + b, 0) * 2;
+
+  // Zocken-Budget: 5 XP pro Tag, an dem das Limit eingehalten wurde
+  let budgetDays = 0;
+  Object.entries(gameData.history).forEach(([date, minutes]) => {
+    if(minutes <= gameData.budget) budgetDays++;
+  });
+  xp += budgetDays * 5;
+
+  return Math.round(xp);
+}
+
+/* Steigende Anforderung pro Level (Level 1→2 braucht 100 XP, 2→3 braucht 200, ...) */
+function computeLevelInfo(xp){
+  let level = 1;
+  let remaining = xp;
+  let req = 100;
+  const MAX_LEVEL = 500; // Sicherheitsgrenze
+  while(remaining >= req && level < MAX_LEVEL){
+    remaining -= req;
+    level++;
+    req = 100 * level;
+  }
+  const percent = req > 0 ? Math.min(100, Math.round((remaining / req) * 100)) : 0;
+  return { level, xpIntoLevel: remaining, xpForNext: req, percent };
+}
+
+function getLevelTitle(level){
+  if(level >= 20) return '🏆 Legende';
+  if(level >= 15) return '💎 Unaufhaltsam';
+  if(level >= 10) return '🔥 Eisern';
+  if(level >= 6) return '⚡ Motiviert';
+  if(level >= 3) return '🌱 Im Aufbau';
+  return '🐣 Anfänger';
+}
+
+function renderLevelBar(){
+  const xp = computeTotalXP();
+  const { level, xpIntoLevel, xpForNext, percent } = computeLevelInfo(xp);
+  document.getElementById('level-title').innerText = `Level ${level} – ${getLevelTitle(level)}`;
+  document.getElementById('level-xp-text').innerText = `${xpIntoLevel} / ${xpForNext} XP · insgesamt ${xp} XP`;
+  document.getElementById('level-progress-bar').style.width = percent + '%';
+}
+
+/* ================= BACKUP-ERINNERUNG ================= */
+function checkBackupReminder(){
+  let referenceDate = localStorage.getItem('last-backup-date');
+  if(!referenceDate){
+    referenceDate = localStorage.getItem('first-use-date');
+    if(!referenceDate){
+      referenceDate = getTodayKey();
+      localStorage.setItem('first-use-date', referenceDate);
+    }
+  }
+
+  const days = daysSince(referenceDate);
+  const banner = document.getElementById('backup-reminder-banner');
+  if(days >= 7){
+    banner.innerHTML = `
+      <span>⚠️ Du hast seit ${days} Tagen kein Backup gemacht – deine Daten liegen nur in diesem Browser.</span>
+      <span style="display:flex; gap:8px;">
+        <button onclick="exportBackup()">Jetzt sichern</button>
+        <button class="dismiss-btn" onclick="dismissBackupReminder()">Später</button>
+      </span>
+    `;
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function dismissBackupReminder(){
+  document.getElementById('backup-reminder-banner').style.display = 'none';
+}
+
+/* ================= BACKUP (Export / Import) ================= */
+const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'habits-data', 'focus-data', 'game-data'];
+
+function showBackupStatus(msg, isError){
+  const el = document.getElementById('backup-status');
+  el.textContent = msg;
+  el.classList.toggle('success', !isError);
+  el.classList.toggle('error', !!isError);
+  setTimeout(() => { el.textContent = ''; el.classList.remove('success','error'); }, 5000);
+}
+
+function exportBackup(){
+  try{
+    const backup = { exportedAt: new Date().toISOString(), data: {} };
+    BACKUP_KEYS.forEach(key => {
+      const raw = localStorage.getItem(key);
+      if(raw !== null) backup.data[key] = JSON.parse(raw);
+    });
+
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const dateStr = getTodayKey();
+    a.href = url;
+    a.download = `ferien-tracker-backup-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showBackupStatus('✅ Backup wurde heruntergeladen.', false);
+    localStorage.setItem('last-backup-date', getTodayKey());
+    checkBackupReminder();
+  } catch(e){
+    console.error('Backup-Export fehlgeschlagen', e);
+    showBackupStatus('❌ Backup konnte nicht erstellt werden.', true);
+  }
+}
+
+function importBackup(event){
+  const file = event.target.files[0];
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const parsed = JSON.parse(reader.result);
+      const data = parsed.data || parsed; // auch ältere/rohe Exporte akzeptieren
+
+      if(!confirm('Vorhandene Daten in diesem Browser werden mit dem Backup überschrieben. Fortfahren?')){
+        event.target.value = '';
+        return;
+      }
+
+      BACKUP_KEYS.forEach(key => {
+        if(data[key] !== undefined){
+          localStorage.setItem(key, JSON.stringify(data[key]));
+        }
+      });
+
+      localStorage.setItem('last-backup-date', getTodayKey());
+      loadAll();
+      showBackupStatus('✅ Backup wurde wiederhergestellt.', false);
+    } catch(e){
+      console.error('Backup-Import fehlgeschlagen', e);
+      showBackupStatus('❌ Diese Datei konnte nicht gelesen werden.', true);
+    } finally {
+      event.target.value = '';
+    }
+  };
+  reader.readAsText(file);
 }
 
 /* ---------- Init ---------- */

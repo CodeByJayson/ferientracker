@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ferien-Tracker</title>
 <link rel="stylesheet" href="style.css">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#6366f1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ferien-Tracker">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
@@ -14,6 +21,25 @@
     <h1>🌴 Ferien-Tracker</h1>
     <p id="current-date"></p>
   </header>
+
+  <div class="level-bar">
+    <div class="level-header">
+      <span class="level-title" id="level-title">Level 1 – 🐣 Anfänger</span>
+      <span class="level-xp-text" id="level-xp-text"></span>
+    </div>
+    <div class="progress-container level-progress-container">
+      <div class="progress-bar level-progress-bar" id="level-progress-bar"></div>
+    </div>
+  </div>
+
+  <div id="backup-reminder-banner" class="backup-reminder-banner"></div>
+
+  <div class="backup-bar">
+    <button class="ghost" onclick="exportBackup()">💾 Backup herunterladen</button>
+    <button class="ghost" onclick="document.getElementById('backup-file-input').click()">📥 Backup wiederherstellen</button>
+    <input type="file" id="backup-file-input" accept="application/json" style="display:none;" onchange="importBackup(event)">
+  </div>
+  <div id="backup-status"></div>
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="books" onclick="switchTab('books')">📚 Bücher</button>
@@ -186,6 +212,7 @@
       <h2>✅ Positive Gewohnheiten</h2>
       <div class="form-group">
         <input type="text" id="good-habit-name" placeholder="z.B. 10.000 Schritte gehen">
+        <input type="time" id="good-habit-time" style="max-width:130px;">
         <button onclick="addGoodHabit()">Hinzufügen</button>
       </div>
       <div class="todo-list" id="good-habits-list" style="margin-top:16px;"></div>
@@ -195,6 +222,7 @@
       <h2>🚫 Schlechte Gewohnheiten loswerden</h2>
       <div class="form-group">
         <input type="text" id="bad-habit-name" placeholder="z.B. weniger Social Media">
+        <input type="time" id="bad-habit-time" style="max-width:130px;">
         <button onclick="addBadHabit()">Hinzufügen</button>
       </div>
       <div class="todo-list" id="bad-habits-list" style="margin-top:16px;"></div>
