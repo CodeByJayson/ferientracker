@@ -56,6 +56,31 @@
   #backup-status.success{ color:#6ee7b7; }
   #backup-status.error{ color:var(--danger-color); }
 
+  /* Today widget - visible on every tab */
+  .today-widget{
+    border-color:rgba(6,182,212,.35);
+    background:rgba(6,182,212,.06);
+  }
+  .today-widget .todo-item{ margin-bottom:8px; }
+  .today-widget #today-widget-list{
+    max-height:220px;
+    overflow-y:auto;
+  }
+
+  /* Fahrschule daily goal bar */
+  .daily-goal-label{
+    color:var(--text-muted);
+    font-size:12px;
+    font-weight:600;
+    margin-top:16px;
+    margin-bottom:6px;
+  }
+  .daily-goal-container{ height:18px; margin-bottom:0; }
+  .progress-bar.fahr-daily-bar{
+    background:linear-gradient(90deg, #109104, #4dd14d);
+  }
+  .daily-goal-container .progress-text{ font-size:12px; line-height:18px; }
+
   /* Backup reminder banner */
   .backup-reminder-banner{
     display:none;
