@@ -22,6 +22,14 @@
     <p id="current-date"></p>
   </header>
 
+  <div class="today-widget card">
+    <div class="row-between">
+      <h2 style="margin-bottom:0;">📌 Heute zu erledigen</h2>
+      <span class="selected-date-label" id="today-widget-summary" style="margin-bottom:0;"></span>
+    </div>
+    <div id="today-widget-list" style="margin-top:10px;"></div>
+  </div>
+
   <div id="backup-reminder-banner" class="backup-reminder-banner"></div>
 
   <div class="backup-bar">
@@ -143,6 +151,12 @@
       <div class="progress-container">
         <div class="progress-bar fahr-bar" id="fahr-progress-bar"></div>
         <div class="progress-text" id="fahr-progress-text"></div>
+      </div>
+
+      <div class="daily-goal-label">Tagesziel: 160 Fragen</div>
+      <div class="progress-container daily-goal-container">
+        <div class="progress-bar fahr-daily-bar" id="fahr-daily-progress-bar"></div>
+        <div class="progress-text" id="fahr-daily-progress-text"></div>
       </div>
     </div>
 
