@@ -498,6 +498,16 @@ function renderFahr(){
 
   document.getElementById('fahr-total').value = fahrData.total;
 
+  // Tagesziel: 160 Fragen pro Tag
+  const DAILY_GOAL = 160;
+  const todayKey = getTodayKey();
+  const doneToday = fahrData.history[todayKey] || 0;
+  const dailyPercent = Math.min(100, Math.round((doneToday / DAILY_GOAL) * 100));
+  document.getElementById('fahr-daily-progress-bar').style.width = dailyPercent + '%';
+  document.getElementById('fahr-daily-progress-text').innerText = doneToday >= DAILY_GOAL
+    ? `🎉 Tagesziel erreicht! (${doneToday} / ${DAILY_GOAL})`
+    : `${doneToday} / ${DAILY_GOAL} heute`;
+
   const streak = computeStreak(fahrData.history);
   document.getElementById('fahr-streak-badge').innerHTML = streak > 0
     ? `<div class="streak-badge">🔥 ${streak} Tag${streak===1?'':'e'} in Folge geübt</div>`
@@ -630,6 +640,41 @@ function renderTodo(){
     : '';
 
   saveTodoData();
+  renderTodayWidget();
+}
+
+/* Kompaktes Widget, das die heutigen Aufgaben unabhängig vom aktiven Tab zeigt.
+   Nutzt bewusst den heutigen Tag fest (nicht "selectedDate" aus dem Kalender),
+   damit es sich nicht verändert, während man im Kalender woanders hin blättert. */
+function renderTodayWidget(){
+  const list = document.getElementById('today-widget-list');
+  const summary = document.getElementById('today-widget-summary');
+  const todayKey = getTodayKey();
+  const items = todosData[todayKey] || [];
+
+  if(items.length === 0){
+    summary.innerText = '';
+    list.innerHTML = '<p class="empty-state" style="margin:4px 0;">Keine Aufgaben für heute eingetragen.</p>';
+    return;
+  }
+
+  const doneCount = items.filter(t => t.done).length;
+  summary.innerText = `${doneCount} von ${items.length} erledigt`;
+
+  list.innerHTML = items.map(item => `
+    <div class="todo-item ${item.done ? 'done' : ''}">
+      <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleTodayWidgetTodo('${item.id}')">
+      <span class="todo-text">${item.text}</span>
+    </div>
+  `).join('');
+}
+
+function toggleTodayWidgetTodo(id){
+  const todayKey = getTodayKey();
+  const items = todosData[todayKey] || [];
+  const item = items.find(t => t.id === id);
+  if(item) item.done = !item.done;
+  renderTodo(); // hält Kalender, Aufgabenliste und dieses Widget synchron
 }
 
 function renderTodoList(){
