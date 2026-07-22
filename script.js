@@ -11,6 +11,13 @@ let habitsData = { good: [], bad: [] };
 // bad:  [{ id, name, startDate, lastRelapse, best }]
 let focusData = { history: {} };         // { "YYYY-MM-DD": totalMinutes }
 let gameData = { budget: 60, history: {} }; // { "YYYY-MM-DD": minutesPlayed }
+let sleepData = { goalHours: null, entries: [] }; // entries: [{ date, hours }]
+let gtgData = {
+  targets: { pushups: 8, dips: 5, pullups: 3 },
+  maxes: { pushups: 18, dips: 11, pullups: 8 },
+  lastTestDate: null,
+  history: { pushups: {}, dips: {}, pullups: {} } // je "YYYY-MM-DD": Wiederholungen
+};
 
 const FOCUS_DURATION_SEC = 25 * 60;
 const BREAK_DURATION_SEC = 5 * 60;
@@ -23,6 +30,8 @@ let timerIntervalId = null;
 
 let focusChart = null;
 let gameChart = null;
+let sleepChart = null;
+let gtgChart = null;
 
 const todayObj = new Date();
 let calendarYear = todayObj.getFullYear();
@@ -73,6 +82,8 @@ let weightOffset = 0;
 let fahrOffset = 0;
 let focusOffset = 0;
 let gameOffset = 0;
+let sleepOffset = 0;
+let gtgOffset = 0;
 
 function fmtShortDate(d){
   return `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.`;
@@ -191,6 +202,16 @@ function loadAll(){
     if(g){ gameData = JSON.parse(g); }
   } catch(e){ console.error('Konnte Zocken-Daten nicht laden', e); }
 
+  try{
+    const sl = localStorage.getItem('sleep-data');
+    if(sl){ sleepData = JSON.parse(sl); }
+  } catch(e){ console.error('Konnte Schlaf-Daten nicht laden', e); }
+
+  try{
+    const gtg = localStorage.getItem('gtg-data');
+    if(gtg){ gtgData = JSON.parse(gtg); }
+  } catch(e){ console.error('Konnte Trainings-Daten nicht laden', e); }
+
   document.getElementById('loading-note').style.display = 'none';
   autoApplyMissedJokers();
   materializeRecurringTodos();
@@ -204,6 +225,8 @@ function loadAll(){
   renderHabits();
   renderFocus();
   renderGame();
+  renderSleep();
+  renderGTG();
 }
 
 function saveBooksData(){
@@ -241,6 +264,14 @@ function saveFocusData(){
 function saveGameData(){
   try{ localStorage.setItem('game-data', JSON.stringify(gameData)); }
   catch(e){ console.error('Speichern fehlgeschlagen (Zocken)', e); }
+}
+function saveSleepData(){
+  try{ localStorage.setItem('sleep-data', JSON.stringify(sleepData)); }
+  catch(e){ console.error('Speichern fehlgeschlagen (Schlaf)', e); }
+}
+function saveGTGData(){
+  try{ localStorage.setItem('gtg-data', JSON.stringify(gtgData)); }
+  catch(e){ console.error('Speichern fehlgeschlagen (Training)', e); }
 }
 
 /* ---------- Tabs ---------- */
@@ -494,6 +525,113 @@ function shiftWeightChart(delta){
   const maxOffset = Math.max(0, Math.ceil(allEntries.length / CHART_WINDOW_SIZE) - 1);
   weightOffset = Math.max(0, Math.min(maxOffset, weightOffset + delta));
   updateWeightChart();
+}
+
+/* ================= SCHLAF ================= */
+function renderSleep(){
+  const entries = sleepData.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const last = entries.length ? entries[entries.length - 1] : null;
+  const last7Total = sumLastNDaysFromEntries(entries, 7);
+  const last7Count = entries.filter(e => daysSince(e.date) < 7).length;
+  const avg7 = last7Count > 0 ? (last7Total / last7Count) : 0;
+
+  let statsHtml = `
+    <div class="stat-box"><div class="num">${last ? last.hours + ' h' : '–'}</div><div class="label">Letzte Nacht</div></div>
+    <div class="stat-box"><div class="num">${avg7 ? avg7.toFixed(1) + ' h' : '–'}</div><div class="label">Ø letzte 7 Nächte</div></div>
+  `;
+  if(sleepData.goalHours){
+    const diff = (last ? last.hours : 0) - sleepData.goalHours;
+    statsHtml += `<div class="stat-box"><div class="num">${diff >= 0 ? '+' : ''}${diff.toFixed(1)} h</div><div class="label">Zu Zielstunden</div></div>`;
+  } else {
+    statsHtml += `<div class="stat-box"><div class="num">${entries.length}</div><div class="label">Einträge</div></div>`;
+  }
+  document.getElementById('sleep-stats').innerHTML = statsHtml;
+  document.getElementById('sleep-goal').value = sleepData.goalHours || '';
+
+  const entryHistory = {};
+  entries.forEach(e => entryHistory[e.date] = 1);
+  const streak = computeStreak(entryHistory);
+  document.getElementById('sleep-streak-badge').innerHTML = streak > 0
+    ? `<div class="streak-badge" style="background:rgba(59,130,246,.12); color:#93c5fd;">🔥 ${streak} Nacht${streak===1?'':'e'} in Folge getrackt</div>`
+    : '';
+
+  saveSleepData();
+  updateSleepChart();
+}
+
+function sumLastNDaysFromEntries(entries, n){
+  return entries
+    .filter(e => daysSince(e.date) < n)
+    .reduce((sum, e) => sum + e.hours, 0);
+}
+
+function saveSleepGoal(){
+  const goal = parseFloat(document.getElementById('sleep-goal').value);
+  sleepData.goalHours = isNaN(goal) || goal <= 0 ? null : goal;
+  renderSleep();
+}
+
+function addSleepEntry(){
+  const dateInput = document.getElementById('sleep-date');
+  const hoursInput = document.getElementById('sleep-hours');
+  const date = dateInput.value || getTodayKey();
+  const hours = parseFloat(hoursInput.value);
+
+  if(isNaN(hours) || hours <= 0 || hours > 24){
+    alert('Bitte gib eine gültige Anzahl Stunden ein (0–24).');
+    return;
+  }
+  const existingIndex = sleepData.entries.findIndex(e => e.date === date);
+  if(existingIndex >= 0){
+    sleepData.entries[existingIndex].hours = hours;
+  } else {
+    sleepData.entries.push({ date, hours });
+  }
+  hoursInput.value = '';
+  renderSleep();
+}
+
+function updateSleepChart(){
+  const ctx = document.getElementById('sleepChart').getContext('2d');
+  const allEntries = sleepData.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
+  const size = CHART_WINDOW_SIZE;
+  const total = allEntries.length;
+  const maxOffset = Math.max(0, Math.ceil(total / size) - 1);
+  sleepOffset = Math.min(sleepOffset, maxOffset);
+
+  const endIndex = total - sleepOffset * size;
+  const startIndex = Math.max(0, endIndex - size);
+  const windowEntries = allEntries.slice(Math.max(0, startIndex), Math.max(0, endIndex));
+
+  const labels = windowEntries.length ? windowEntries.map(e => {
+    const [y,m,d] = e.date.split('-');
+    return `${d}.${m}.`;
+  }) : ['Heute'];
+  const values = windowEntries.length ? windowEntries.map(e => e.hours) : [0];
+
+  const rangeLabel = windowEntries.length
+    ? `${windowEntries[0].date.split('-').reverse().join('.')} – ${windowEntries[windowEntries.length-1].date.split('-').reverse().join('.')}`
+    : 'Keine Einträge';
+  document.getElementById('sleep-range-label').innerText = rangeLabel;
+  document.getElementById('sleep-next-btn').disabled = (sleepOffset === 0);
+  attachSwipe('sleep-chart-container', () => shiftSleepChart(1), () => shiftSleepChart(-1));
+
+  if(sleepChart) sleepChart.destroy();
+  sleepChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[{
+      label:'Schlafstunden', data: values,
+      backgroundColor:'rgba(59,130,246,.6)',
+      borderColor:'#3b82f6', borderWidth:1, borderRadius:6
+    }]},
+    options: chartOptions()
+  });
+}
+
+function shiftSleepChart(delta){
+  const maxOffset = Math.max(0, Math.ceil(sleepData.entries.length / CHART_WINDOW_SIZE) - 1);
+  sleepOffset = Math.max(0, Math.min(maxOffset, sleepOffset + delta));
+  updateSleepChart();
 }
 
 /* ================= FAHRSCHULE ================= */
@@ -1046,11 +1184,13 @@ function renderGoodHabits(){
         </div>
         <span class="habit-name">${h.name}</span>
         ${h.time ? `<span class="habit-time">⏰ ${h.time}</span>` : ''}
-        <span class="habit-streak ${doneToday ? 'active' : ''}">🔥 <span class="streak-number">${streak}</span> Tag${streak===1?'':'e'}</span>
-        <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
-        <button class="joker-btn" onclick="useJoker('${h.id}')" ${jokerAvailable ? '' : 'disabled'} title="1x pro Woche einen Tag aussetzen, ohne den Streak zu verlieren">Joker</button>
-        <button class="edit-btn" onclick="startEditGoodHabit('${h.id}')">Bearbeiten</button>
-        <button class="delete-btn" onclick="deleteGoodHabit('${h.id}')">Löschen</button>
+        <div class="habit-actions">
+          <span class="habit-streak ${doneToday ? 'active' : ''}">🔥 <span class="streak-number">${streak}</span> Tag${streak===1?'':'e'}</span>
+          <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
+          <button class="joker-btn" onclick="useJoker('${h.id}')" ${jokerAvailable ? '' : 'disabled'} title="1x pro Woche einen Tag aussetzen, ohne den Streak zu verlieren">Joker</button>
+          <button class="edit-btn" onclick="startEditGoodHabit('${h.id}')">Bearbeiten</button>
+          <button class="delete-btn" onclick="deleteGoodHabit('${h.id}')">Löschen</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -1088,11 +1228,13 @@ function renderBadHabits(){
         </div>
         <span class="habit-name">${h.name}</span>
         ${h.time ? `<span class="habit-time">⏰ ${h.time}</span>` : ''}
-        <span class="habit-streak active"><span class="streak-number">${streak}</span> Tag${streak===1?'':'e'} sauber</span>
-        <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
-        <button class="relapse-btn" onclick="reportRelapse('${h.id}')">Rückfall melden</button>
-        <button class="edit-btn" onclick="startEditBadHabit('${h.id}')">Bearbeiten</button>
-        <button class="delete-btn" onclick="deleteBadHabit('${h.id}')">Löschen</button>
+        <div class="habit-actions">
+          <span class="habit-streak active"><span class="streak-number">${streak}</span> Tag${streak===1?'':'e'} sauber</span>
+          <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
+          <button class="relapse-btn" onclick="reportRelapse('${h.id}')">Rückfall melden</button>
+          <button class="edit-btn" onclick="startEditBadHabit('${h.id}')">Bearbeiten</button>
+          <button class="delete-btn" onclick="deleteBadHabit('${h.id}')">Löschen</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -1523,6 +1665,187 @@ function shiftGameChart(delta){
   updateGameChart();
 }
 
+/* ================= TRAINING (GTG - Grease the Groove) ================= */
+const GTG_EXERCISES = [
+  { key: 'pushups', name: '💪 Liegestütze' },
+  { key: 'dips', name: '🤸 Dips' },
+  { key: 'pullups', name: '🧗 Klimmzüge' }
+];
+
+/* Index = JS Date.getDay(): 0=Sonntag ... 6=Samstag */
+const GTG_WEEKLY_PLAN = [
+  { name: 'Sonntag', text: 'Pause oder 2–3 sehr leichte GTG-Runden.' },
+  { name: 'Montag (Gym – Push)', text: 'Kein GTG für Dips oder Liegestütze. Optional 2–3 leichte Sätze Klimmzüge (3 Wdh.) mit großem Abstand zum Training.' },
+  { name: 'Dienstag', text: '5–6 GTG-Runden: 3–4 Klimmzüge, 5–6 Dips, 8–10 Liegestütze.' },
+  { name: 'Mittwoch', text: '5–6 GTG-Runden wie Dienstag.' },
+  { name: 'Donnerstag (Gym – Pull)', text: 'Kein GTG für Klimmzüge. Optional 2–3 leichte Sätze Liegestütze (8–10 Wdh.) und Dips (5 Wdh.), wenn du dich frisch fühlst.' },
+  { name: 'Freitag', text: '5–6 GTG-Runden wie Dienstag.' },
+  { name: 'Samstag', text: '3–5 lockere GTG-Runden oder komplett frei, wenn du müde bist.' }
+];
+
+function gtgCombinedHistory(){
+  const merged = {};
+  GTG_EXERCISES.forEach(ex => {
+    Object.entries(gtgData.history[ex.key] || {}).forEach(([date, reps]) => {
+      merged[date] = (merged[date] || 0) + reps;
+    });
+  });
+  return merged;
+}
+
+function renderGTG(){
+  renderGTGPlan();
+  renderGTGGoals();
+  renderGTGLog();
+  updateGTGChart();
+  saveGTGData();
+}
+
+function renderGTGPlan(){
+  const todayIndex = new Date().getDay();
+  const today = GTG_WEEKLY_PLAN[todayIndex];
+
+  document.getElementById('gtg-today-plan').innerHTML = `
+    <div class="gtg-today-highlight">
+      <div class="gtg-day-title">Heute: ${today.name}</div>
+      <div class="gtg-day-text">${today.text}</div>
+    </div>
+  `;
+
+  document.getElementById('gtg-week-plan').innerHTML = GTG_WEEKLY_PLAN.map((day, index) => `
+    <div class="gtg-day-row ${index === todayIndex ? 'today' : ''}">
+      <span class="gtg-day-name">${day.name}</span>
+      <span>${day.text}</span>
+    </div>
+  `).join('');
+}
+
+function renderGTGGoals(){
+  document.getElementById('gtg-goal-grid').innerHTML = GTG_EXERCISES.map(ex => `
+    <div class="gtg-goal-col">
+      <div class="gtg-goal-name">${ex.name}</div>
+      <label>Ziel-Wdh. pro Runde</label>
+      <input type="number" id="gtg-target-${ex.key}" value="${gtgData.targets[ex.key]}" min="1">
+      <label>Geschätztes Maximum</label>
+      <input type="number" id="gtg-max-${ex.key}" value="${gtgData.maxes[ex.key]}" min="1">
+    </div>
+  `).join('');
+
+  const reminderEl = document.getElementById('gtg-retest-reminder');
+  const labelEl = document.getElementById('gtg-last-test-label');
+
+  if(!gtgData.lastTestDate){
+    reminderEl.innerHTML = '';
+    labelEl.innerText = 'Noch kein Maximaltest eingetragen.';
+  } else {
+    const days = daysSince(gtgData.lastTestDate);
+    labelEl.innerText = `Letzter Maximaltest: vor ${days} Tag${days===1?'':'en'}`;
+    reminderEl.innerHTML = days >= 28
+      ? '<div class="celebration" style="background:rgba(244,63,94,.12); border-color:rgba(244,63,94,.4); color:#fda4af;">📅 Zeit für einen neuen Maximaltest – seit 4+ Wochen nicht mehr getestet!</div>'
+      : '';
+  }
+}
+
+function saveGTGGoals(){
+  GTG_EXERCISES.forEach(ex => {
+    const target = parseInt(document.getElementById(`gtg-target-${ex.key}`).value);
+    const max = parseInt(document.getElementById(`gtg-max-${ex.key}`).value);
+    if(!isNaN(target) && target > 0) gtgData.targets[ex.key] = target;
+    if(!isNaN(max) && max > 0) gtgData.maxes[ex.key] = max;
+  });
+  renderGTG();
+}
+
+function markGTGRetested(){
+  gtgData.lastTestDate = getTodayKey();
+  renderGTGGoals();
+  saveGTGData();
+}
+
+function logGTGRound(exerciseKey){
+  const today = getTodayKey();
+  const reps = gtgData.targets[exerciseKey];
+  gtgData.history[exerciseKey][today] = (gtgData.history[exerciseKey][today] || 0) + reps;
+  renderGTG();
+}
+
+function logGTGCustom(exerciseKey){
+  const input = document.getElementById(`gtg-custom-${exerciseKey}`);
+  const reps = parseInt(input.value);
+  if(isNaN(reps) || reps <= 0){
+    alert('Bitte gib eine gültige Wiederholungszahl ein.');
+    return;
+  }
+  const today = getTodayKey();
+  gtgData.history[exerciseKey][today] = (gtgData.history[exerciseKey][today] || 0) + reps;
+  input.value = '';
+  renderGTG();
+}
+
+function renderGTGLog(){
+  const today = getTodayKey();
+
+  const statsHtml = GTG_EXERCISES.map(ex => {
+    const todayReps = gtgData.history[ex.key][today] || 0;
+    return `<div class="stat-box"><div class="num">${todayReps}</div><div class="label">${ex.name} heute</div></div>`;
+  }).join('');
+  document.getElementById('gtg-stats').innerHTML = statsHtml;
+
+  const streak = computeStreak(gtgCombinedHistory());
+  document.getElementById('gtg-streak-badge').innerHTML = streak > 0
+    ? `<div class="streak-badge" style="background:rgba(244,63,94,.12); color:#fda4af;">🔥 ${streak} Tag${streak===1?'':'e'} in Folge trainiert</div>`
+    : '';
+
+  document.getElementById('gtg-log-rows').innerHTML = GTG_EXERCISES.map(ex => {
+    const todayReps = gtgData.history[ex.key][today] || 0;
+    return `
+      <div class="gtg-exercise-row">
+        <span class="gtg-exercise-name">${ex.name}</span>
+        <span class="gtg-today-total">Heute: ${todayReps} Wdh.</span>
+        <button class="quick" onclick="logGTGRound('${ex.key}')">+ Runde (${gtgData.targets[ex.key]} Wdh.)</button>
+        <input type="number" id="gtg-custom-${ex.key}" placeholder="eigene Anzahl">
+        <button onclick="logGTGCustom('${ex.key}')">Hinzufügen</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function updateGTGChart(){
+  const ctx = document.getElementById('gtgChart').getContext('2d');
+  const windows = GTG_EXERCISES.map(ex => getChartWindow(gtgData.history[ex.key], gtgOffset));
+  const labels = windows[0].labels;
+  const rangeLabel = windows[0].rangeLabel;
+
+  document.getElementById('gtg-range-label').innerText = rangeLabel;
+  updateNavButtons('gtg-next-btn', gtgOffset);
+  attachSwipe('gtg-chart-container', () => shiftGTGChart(1), () => shiftGTGChart(-1));
+
+  const colors = ['#f43f5e', '#fb923c', '#facc15'];
+
+  if(gtgChart) gtgChart.destroy();
+  gtgChart = new Chart(ctx, {
+    type:'bar',
+    data:{
+      labels,
+      datasets: GTG_EXERCISES.map((ex, i) => ({
+        label: ex.name,
+        data: windows[i].values,
+        backgroundColor: colors[i],
+        borderRadius:4
+      }))
+    },
+    options: {
+      ...chartOptions(),
+      plugins:{ legend:{ display:true, position:'bottom', labels:{ color:'#94a3b8', boxWidth:12, font:{ size:11 } } } }
+    }
+  });
+}
+
+function shiftGTGChart(delta){
+  gtgOffset = Math.max(0, Math.min(MAX_CHART_OFFSET, gtgOffset + delta));
+  updateGTGChart();
+}
+
 /* ================= Celebration & shared chart options ================= */
 const lastPercent = { weight: -1, fahr: -1 };
 function checkCelebration(key, percent){
@@ -1591,7 +1914,7 @@ function dismissBackupReminder(){
 }
 
 /* ================= BACKUP (Export / Import) ================= */
-const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'recurring-todo-data', 'habits-data', 'focus-data', 'game-data'];
+const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'recurring-todo-data', 'habits-data', 'focus-data', 'game-data', 'sleep-data', 'gtg-data'];
 
 function showBackupStatus(msg, isError){
   const el = document.getElementById('backup-status');
@@ -1665,6 +1988,7 @@ function importBackup(event){
 
 /* ---------- Init ---------- */
 document.getElementById('weight-date').value = getTodayKey();
+document.getElementById('sleep-date').value = getTodayKey();
 updateTimerUI();
 loadAll();
 
