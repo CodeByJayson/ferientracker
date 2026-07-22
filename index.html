@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ferien-Tracker</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="styles.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -40,18 +40,20 @@
   <div id="backup-status"></div>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="books" onclick="switchTab('books')">📚 Bücher</button>
+    <button class="tab-btn" data-tab="books" onclick="switchTab('books')">📚 Bücher</button>
     <button class="tab-btn" data-tab="weight" onclick="switchTab('weight')">💪 Gewicht</button>
     <button class="tab-btn" data-tab="fahr" onclick="switchTab('fahr')">🚗 Fahrschule</button>
     <button class="tab-btn" data-tab="todo" onclick="switchTab('todo')">✅ To-Dos</button>
-    <button class="tab-btn" data-tab="habit" onclick="switchTab('habit')">🌱 Habits</button>
+    <button class="tab-btn active" data-tab="habit" onclick="switchTab('habit')">🌱 Habits</button>
     <button class="tab-btn" data-tab="focus" onclick="switchTab('focus')">🧠 Fokus</button>
+    <button class="tab-btn" data-tab="sleep" onclick="switchTab('sleep')">😴 Schlaf</button>
+    <button class="tab-btn" data-tab="training" onclick="switchTab('training')">🏋️ Training</button>
   </nav>
 
   <div id="loading-note" class="loading-note">Lade deine Daten …</div>
 
   <!-- BÜCHER TAB -->
-  <div id="tab-books" class="tab-panel active">
+  <div id="tab-books" class="tab-panel">
     <div class="card">
       <h2>📖 Neues Buch hinzufügen</h2>
       <div class="form-group">
@@ -234,7 +236,7 @@
   </div>
 
   <!-- HABITS TAB -->
-  <div id="tab-habit" class="tab-panel habit-tab">
+  <div id="tab-habit" class="tab-panel habit-tab active">
     <div class="card">
       <h2>✅ Positive Gewohnheiten</h2>
       <div class="form-group">
@@ -324,6 +326,91 @@
         <button class="chart-nav-btn" id="game-next-btn" onclick="shiftGameChart(-1)">▶</button>
       </div>
       <div class="chart-container" id="game-chart-container"><canvas id="gameChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- SCHLAF TAB -->
+  <div id="tab-sleep" class="tab-panel sleep-tab">
+    <div class="card">
+      <h2>😴 Schlaf eintragen</h2>
+      <div class="form-group">
+        <input type="date" id="sleep-date">
+        <input type="number" step="0.25" id="sleep-hours" placeholder="Stunden geschlafen">
+        <button onclick="addSleepEntry()">Eintragen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">📊 Dein Schlaf</h2>
+      </div>
+      <div id="sleep-streak-badge"></div>
+      <div class="stats-row" id="sleep-stats"></div>
+      <div class="form-group" style="margin-top:4px;">
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:150px;">
+          <label style="font-size:12px; color:var(--text-muted);">Zielstunden pro Nacht</label>
+          <input type="number" step="0.25" id="sleep-goal" placeholder="z.B. 8">
+        </div>
+        <button onclick="saveSleepGoal()">Speichern</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Verlauf</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftSleepChart(1)">◀</button>
+        <span class="chart-range-label" id="sleep-range-label"></span>
+        <button class="chart-nav-btn" id="sleep-next-btn" onclick="shiftSleepChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="sleep-chart-container"><canvas id="sleepChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TRAINING TAB (GTG) -->
+  <div id="tab-training" class="tab-panel training-tab">
+    <div class="card">
+      <h2>📅 Dein GTG-Wochenplan</h2>
+      <div id="gtg-today-plan"></div>
+      <div id="gtg-week-plan" class="gtg-week-plan"></div>
+      <div class="gtg-rules">
+        <strong>Wichtige Regeln:</strong>
+        <ul>
+          <li>Nie bis zum Muskelversagen trainieren.</li>
+          <li>Zwischen den GTG-Sätzen mindestens 30–60 Minuten Pause lassen.</li>
+          <li>Jede Wiederholung sauber und kontrolliert ausführen.</li>
+          <li>Nach 3–4 Wochen dein Maximum erneut testen und die Wiederholungen anpassen.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🎯 Ziele & Maxima</h2>
+      <div id="gtg-retest-reminder"></div>
+      <div class="gtg-goal-grid" id="gtg-goal-grid"></div>
+      <div class="form-group" style="margin-top:14px;">
+        <button onclick="saveGTGGoals()">Ziele speichern</button>
+        <button class="ghost" onclick="markGTGRetested()">✅ Heute erneut getestet</button>
+      </div>
+      <p class="selected-date-label" id="gtg-last-test-label" style="margin-top:10px; margin-bottom:0;"></p>
+    </div>
+
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">➕ Runde eintragen</h2>
+      </div>
+      <div id="gtg-streak-badge"></div>
+      <div class="stats-row" id="gtg-stats"></div>
+      <div id="gtg-log-rows"></div>
+    </div>
+
+    <div class="card">
+      <h2>Verlauf</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftGTGChart(1)">◀</button>
+        <span class="chart-range-label" id="gtg-range-label"></span>
+        <button class="chart-nav-btn" id="gtg-next-btn" onclick="shiftGTGChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="gtg-chart-container"><canvas id="gtgChart"></canvas></div>
     </div>
   </div>
 </div>
