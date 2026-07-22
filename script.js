@@ -5,6 +5,7 @@ let weightData = { start: null, goal: null, entries: [] };
 let fahrData = { total: 1074, done: 0, history: {} };
 let todosData = {}; // { "YYYY-MM-DD": [{ id, text, done }] }
 let generalTodos = []; // [{ id, text, done }] - Gesamtübersicht, unabhängig vom Kalender
+let recurringTodos = []; // [{ id, text, weekday(0=So..6=Sa), createdDate, skippedDates: [] }]
 let habitsData = { good: [], bad: [] };
 // good: [{ id, name, history: {date:true} }]
 // bad:  [{ id, name, startDate, lastRelapse, best }]
@@ -17,7 +18,7 @@ const BREAK_DURATION_SEC = 5 * 60;
 let timerRunning = false;
 let timerPhase = 'focus'; // 'focus' | 'break'
 let remainingSeconds = FOCUS_DURATION_SEC;
-let focusSecondsThisPhase = 0; // actual elapsed focus seconds in current focus phase
+let phaseEndTimestamp = null; // ms epoch when the current phase should end (only set while running)
 let timerIntervalId = null;
 
 let focusChart = null;
@@ -171,6 +172,11 @@ function loadAll(){
   } catch(e){ console.error('Konnte Aufgabenliste nicht laden', e); }
 
   try{
+    const rt = localStorage.getItem('recurring-todo-data');
+    if(rt){ recurringTodos = JSON.parse(rt); }
+  } catch(e){ console.error('Konnte wiederkehrende Aufgaben nicht laden', e); }
+
+  try{
     const h = localStorage.getItem('habits-data');
     if(h){ habitsData = JSON.parse(h); }
   } catch(e){ console.error('Konnte Habit-Daten nicht laden', e); }
@@ -187,12 +193,14 @@ function loadAll(){
 
   document.getElementById('loading-note').style.display = 'none';
   autoApplyMissedJokers();
+  materializeRecurringTodos();
   checkBackupReminder();
   renderBooks();
   renderWeight();
   renderFahr();
   renderTodo();
   renderGeneralTodos();
+  renderRecurringList();
   renderHabits();
   renderFocus();
   renderGame();
@@ -217,6 +225,10 @@ function saveTodoData(){
 function saveGeneralTodosData(){
   try{ localStorage.setItem('general-todo-data', JSON.stringify(generalTodos)); }
   catch(e){ console.error('Speichern fehlgeschlagen (Aufgabenliste)', e); }
+}
+function saveRecurringTodosData(){
+  try{ localStorage.setItem('recurring-todo-data', JSON.stringify(recurringTodos)); }
+  catch(e){ console.error('Speichern fehlgeschlagen (wiederkehrende Aufgaben)', e); }
 }
 function saveHabitsData(){
   try{ localStorage.setItem('habits-data', JSON.stringify(habitsData)); }
@@ -463,6 +475,8 @@ function updateWeightChart(){
   attachSwipe('weight-chart-container', () => shiftWeightChart(1), () => shiftWeightChart(-1));
 
   if(weightChart) weightChart.destroy();
+  const minValue = values.length ? Math.min(...values) : 50;
+  const yMin = Math.min(50, Math.floor(minValue - 2)); // startet bei 50kg, weicht nur aus falls Werte darunter liegen
   weightChart = new Chart(ctx, {
     type:'line',
     data:{ labels, datasets:[{
@@ -471,7 +485,7 @@ function updateWeightChart(){
       borderWidth:3, fill:true, tension:.3,
       pointBackgroundColor:'#f9a8d4', pointRadius:3
     }]},
-    options: chartOptions()
+    options: chartOptions(yMin)
   });
 }
 
@@ -578,6 +592,28 @@ function dateKey(y, m, d){
   return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
 }
 
+/* Ein Punkt pro erledigtem To-Do an diesem Tag (max. 5, danach "+n"),
+   plus ein blasser Punkt, falls an dem Tag noch offene Aufgaben liegen. */
+function buildDayDots(items){
+  if(items.length === 0) return '';
+  const MAX_DOTS = 5;
+  const doneCount = items.filter(t => t.done).length;
+  const pendingCount = items.length - doneCount;
+
+  let html = '';
+  const shown = Math.min(doneCount, MAX_DOTS);
+  for(let i = 0; i < shown; i++){
+    html += '<span class="dot dot-done"></span>';
+  }
+  if(doneCount > MAX_DOTS){
+    html += `<span class="dot-extra">+${doneCount - MAX_DOTS}</span>`;
+  }
+  if(pendingCount > 0){
+    html += '<span class="dot dot-pending"></span>';
+  }
+  return html;
+}
+
 function changeMonth(delta){
   calendarMonth += delta;
   if(calendarMonth < 0){ calendarMonth = 11; calendarYear--; }
@@ -614,18 +650,15 @@ function renderTodo(){
   for(let d = 1; d <= daysInMonth; d++){
     const key = dateKey(calendarYear, calendarMonth, d);
     const items = todosData[key] || [];
-    const hasItems = items.length > 0;
-    const allDone = hasItems && items.every(t => t.done);
 
     let classes = 'calendar-day';
     if(key === todayKey) classes += ' today';
     if(key === selectedDate) classes += ' selected';
-    if(allDone) classes += ' done-dot';
 
     grid.insertAdjacentHTML('beforeend', `
       <div class="${classes}" onclick="selectDay('${key}')">
         ${d}
-        ${hasItems ? '<span class="dot"></span>' : ''}
+        <div class="day-dots">${buildDayDots(items)}</div>
       </div>
     `);
   }
@@ -695,6 +728,7 @@ function renderTodoList(){
     <div class="todo-item ${item.done ? 'done' : ''}">
       <input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleTodo('${item.id}')">
       <span class="todo-text">${item.text}</span>
+      ${item.recurringId ? '<span class="recurring-badge">🔁</span>' : ''}
       <button class="delete-btn" onclick="deleteTodo('${item.id}')">Löschen</button>
     </div>
   `).join('');
@@ -702,12 +736,26 @@ function renderTodoList(){
 
 function addTodo(){
   const input = document.getElementById('todo-text');
+  const repeatCheckbox = document.getElementById('todo-repeat-weekly');
   const text = input.value.trim();
   if(!text) return;
 
-  if(!todosData[selectedDate]) todosData[selectedDate] = [];
-  todosData[selectedDate].push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), text, done: false });
+  const repeatWeekly = repeatCheckbox.checked;
+
+  if(repeatWeekly){
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const weekday = new Date(y, m - 1, d).getDay();
+    const templateId = Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+    recurringTodos.push({ id: templateId, text, weekday, createdDate: selectedDate, skippedDates: [] });
+    materializeRecurringTodos();
+    renderRecurringList();
+  } else {
+    if(!todosData[selectedDate]) todosData[selectedDate] = [];
+    todosData[selectedDate].push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), text, done: false });
+  }
+
   input.value = '';
+  repeatCheckbox.checked = false;
   renderTodo();
 }
 
@@ -720,7 +768,100 @@ function toggleTodo(id){
 
 function deleteTodo(id){
   const items = todosData[selectedDate] || [];
+  const item = items.find(t => t.id === id);
+
+  // Bei wiederkehrenden Aufgaben: nur diesen einen Tag überspringen,
+  // statt dass die Aufgabe beim nächsten Laden wieder auftaucht.
+  if(item && item.recurringId){
+    const template = recurringTodos.find(rt => rt.id === item.recurringId);
+    if(template){
+      if(!template.skippedDates) template.skippedDates = [];
+      if(!template.skippedDates.includes(selectedDate)) template.skippedDates.push(selectedDate);
+      saveRecurringTodosData();
+    }
+  }
+
   todosData[selectedDate] = items.filter(t => t.id !== id);
+  renderTodo();
+}
+
+/* ================= WIEDERKEHRENDE (WÖCHENTLICHE) TO-DOS ================= */
+const WEEKDAY_NAMES = ['Sonntag','Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag'];
+
+/* Erzeugt für jede Vorlage die konkreten Tages-Einträge im Kalender,
+   von der Erstellung an bis ca. 12 Wochen in die Zukunft. Bereits
+   übersprungene oder schon vorhandene Tage werden nicht doppelt angelegt. */
+function materializeRecurringTodos(){
+  if(recurringTodos.length === 0) return;
+
+  const windowStart = new Date();
+  windowStart.setDate(windowStart.getDate() - 7);
+  const windowEnd = new Date();
+  windowEnd.setDate(windowEnd.getDate() + 84);
+
+  const MAX_DAYS = 200; // Sicherheitsgrenze, verhindert jede Endlosschleife
+
+  recurringTodos.forEach(template => {
+    if(!template.skippedDates) template.skippedDates = [];
+    let cursor = new Date(windowStart);
+
+    for(let i = 0; i < MAX_DAYS; i++){
+      if(cursor > windowEnd) break;
+
+      if(cursor.getDay() === template.weekday){
+        const key = dateKey(cursor.getFullYear(), cursor.getMonth(), cursor.getDate());
+        const afterCreation = key >= template.createdDate;
+        const notSkipped = !template.skippedDates.includes(key);
+
+        if(afterCreation && notSkipped){
+          if(!todosData[key]) todosData[key] = [];
+          const alreadyExists = todosData[key].some(t => t.recurringId === template.id);
+          if(!alreadyExists){
+            todosData[key].push({
+              id: Date.now().toString(36) + Math.random().toString(36).slice(2,6) + i,
+              text: template.text,
+              done: false,
+              recurringId: template.id
+            });
+          }
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  });
+
+  saveTodoData();
+}
+
+function renderRecurringList(){
+  const list = document.getElementById('recurring-todo-list');
+  if(recurringTodos.length === 0){
+    list.innerHTML = '<p class="empty-state">Noch keine wiederkehrende Aufgabe angelegt.</p>';
+    return;
+  }
+
+  list.innerHTML = recurringTodos.map(rt => `
+    <div class="todo-item">
+      <span class="todo-text">${rt.text}</span>
+      <span class="recurring-badge">jeden ${WEEKDAY_NAMES[rt.weekday]}</span>
+      <button class="delete-btn" onclick="deleteRecurringSeries('${rt.id}')">Serie löschen</button>
+    </div>
+  `).join('');
+
+  saveRecurringTodosData();
+}
+
+function deleteRecurringSeries(id){
+  if(!confirm('Die ganze wiederkehrende Serie löschen? Das entfernt auch alle bereits geplanten (noch nicht erledigten) Termine dafür.')){
+    return;
+  }
+  recurringTodos = recurringTodos.filter(rt => rt.id !== id);
+
+  Object.keys(todosData).forEach(dateKeyStr => {
+    todosData[dateKeyStr] = todosData[dateKeyStr].filter(t => t.recurringId !== id || t.done);
+  });
+
+  renderRecurringList();
   renderTodo();
 }
 
@@ -905,7 +1046,7 @@ function renderGoodHabits(){
         </div>
         <span class="habit-name">${h.name}</span>
         ${h.time ? `<span class="habit-time">⏰ ${h.time}</span>` : ''}
-        <span class="habit-streak">🔥 ${streak} Tag${streak===1?'':'e'}</span>
+        <span class="habit-streak ${doneToday ? 'active' : ''}">🔥 <span class="streak-number">${streak}</span> Tag${streak===1?'':'e'}</span>
         <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
         <button class="joker-btn" onclick="useJoker('${h.id}')" ${jokerAvailable ? '' : 'disabled'} title="1x pro Woche einen Tag aussetzen, ohne den Streak zu verlieren">Joker</button>
         <button class="edit-btn" onclick="startEditGoodHabit('${h.id}')">Bearbeiten</button>
@@ -947,7 +1088,7 @@ function renderBadHabits(){
         </div>
         <span class="habit-name">${h.name}</span>
         ${h.time ? `<span class="habit-time">⏰ ${h.time}</span>` : ''}
-        <span class="habit-stat"><b>${streak}</b> Tag${streak===1?'':'e'} sauber</span>
+        <span class="habit-streak active"><span class="streak-number">${streak}</span> Tag${streak===1?'':'e'} sauber</span>
         <span class="habit-stat">🏆 Rekord: <b>${h.best}</b></span>
         <button class="relapse-btn" onclick="reportRelapse('${h.id}')">Rückfall melden</button>
         <button class="edit-btn" onclick="startEditBadHabit('${h.id}')">Bearbeiten</button>
@@ -1084,10 +1225,19 @@ function saveEditBadHabit(id){
 }
 
 /* ================= POMODORO FOKUS-TIMER (25 / 5) ================= */
+/* Der Timer rechnet über echte Zeitstempel (Date.now()), nicht über reines
+   Hochzählen der Sekunden. Browser drosseln setInterval stark, wenn der Tab
+   im Hintergrund ist oder der Bildschirm gesperrt wird - mit Zeitstempeln
+   zeigt die Anzeige trotzdem den korrekten Stand, sobald man zurückkommt,
+   statt einfach stehen zu bleiben oder falsch weiterzulaufen. */
 function formatTimer(totalSeconds){
   const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
   const ss = String(totalSeconds % 60).padStart(2, '0');
   return `${mm}:${ss}`;
+}
+
+function currentPhaseDuration(){
+  return timerPhase === 'focus' ? FOCUS_DURATION_SEC : BREAK_DURATION_SEC;
 }
 
 function updateTimerUI(){
@@ -1104,29 +1254,35 @@ function showPhaseBanner(msg){
   el.innerHTML = `<div class="celebration">${msg}</div>`;
 }
 
-function tickTimer(){
-  remainingSeconds--;
-  if(timerPhase === 'focus') focusSecondsThisPhase++;
-
-  if(remainingSeconds <= 0){
-    completeFocusPhase();
-  } else {
-    updateTimerUI();
-  }
-}
-
-function completeFocusPhase(){
+/* Wechselt die Phase und verschiebt den Ziel-Zeitstempel exakt um die neue
+   Phasendauer weiter (statt "jetzt + Dauer"), damit sich auch nach mehreren
+   automatisch nachgeholten Phasen kein Fehler aufsummiert. */
+function completePhaseTransition(){
   if(timerPhase === 'focus'){
     logFocusMinutes(25);
     showPhaseBanner('🎉 25 Minuten Fokus geschafft! Zeit für 5 Minuten Pause.');
     timerPhase = 'break';
-    remainingSeconds = BREAK_DURATION_SEC;
+    phaseEndTimestamp += BREAK_DURATION_SEC * 1000;
   } else {
     showPhaseBanner('✅ Pause vorbei! Nächster Fokus-Block startet.');
     timerPhase = 'focus';
-    remainingSeconds = FOCUS_DURATION_SEC;
-    focusSecondsThisPhase = 0;
+    phaseEndTimestamp += FOCUS_DURATION_SEC * 1000;
   }
+}
+
+function tickTimer(){
+  if(!timerRunning || phaseEndTimestamp === null) return;
+
+  let secLeft = Math.round((phaseEndTimestamp - Date.now()) / 1000);
+  const MAX_CATCHUP = 50; // Sicherheitsgrenze für den Fall, dass der Tab SEHR lange im Hintergrund war
+  let guard = 0;
+  while(secLeft <= 0 && guard < MAX_CATCHUP){
+    completePhaseTransition();
+    secLeft = Math.round((phaseEndTimestamp - Date.now()) / 1000);
+    guard++;
+  }
+
+  remainingSeconds = Math.max(0, secLeft);
   updateTimerUI();
 }
 
@@ -1134,10 +1290,16 @@ function toggleFocusTimer(){
   const btn = document.getElementById('focus-timer-btn');
   if(!timerRunning){
     timerRunning = true;
+    phaseEndTimestamp = Date.now() + remainingSeconds * 1000;
     btn.innerText = 'Pause';
     timerIntervalId = setInterval(tickTimer, 1000);
+    tickTimer();
   } else {
+    if(phaseEndTimestamp !== null){
+      remainingSeconds = Math.max(0, Math.round((phaseEndTimestamp - Date.now()) / 1000));
+    }
     timerRunning = false;
+    phaseEndTimestamp = null;
     btn.innerText = 'Weiter';
     clearInterval(timerIntervalId);
   }
@@ -1145,11 +1307,17 @@ function toggleFocusTimer(){
 
 function skipFocusPhase(){
   clearInterval(timerIntervalId);
+  if(timerRunning && phaseEndTimestamp !== null){
+    remainingSeconds = Math.max(0, Math.round((phaseEndTimestamp - Date.now()) / 1000));
+  }
   timerRunning = false;
+  phaseEndTimestamp = null;
   document.getElementById('focus-timer-btn').innerText = 'Start';
 
+  const elapsedSeconds = currentPhaseDuration() - remainingSeconds;
+
   if(timerPhase === 'focus'){
-    const minutes = Math.round(focusSecondsThisPhase / 60);
+    const minutes = Math.round(elapsedSeconds / 60);
     if(minutes > 0) logFocusMinutes(minutes);
     showPhaseBanner('⏭️ Fokus übersprungen. Zeit für 5 Minuten Pause.');
     timerPhase = 'break';
@@ -1158,24 +1326,28 @@ function skipFocusPhase(){
     showPhaseBanner('⏭️ Pause übersprungen. Nächster Fokus-Block startet.');
     timerPhase = 'focus';
     remainingSeconds = FOCUS_DURATION_SEC;
-    focusSecondsThisPhase = 0;
   }
   updateTimerUI();
 }
 
 function resetFocusTimer(){
   clearInterval(timerIntervalId);
+  if(timerRunning && phaseEndTimestamp !== null){
+    remainingSeconds = Math.max(0, Math.round((phaseEndTimestamp - Date.now()) / 1000));
+  }
   timerRunning = false;
+  phaseEndTimestamp = null;
   document.getElementById('focus-timer-btn').innerText = 'Start';
 
-  if(timerPhase === 'focus' && focusSecondsThisPhase >= 30){
-    const minutes = Math.round(focusSecondsThisPhase / 60);
-    logFocusMinutes(minutes);
+  if(timerPhase === 'focus'){
+    const elapsedSeconds = FOCUS_DURATION_SEC - remainingSeconds;
+    if(elapsedSeconds >= 30){
+      logFocusMinutes(Math.round(elapsedSeconds / 60));
+    }
   }
 
   timerPhase = 'focus';
   remainingSeconds = FOCUS_DURATION_SEC;
-  focusSecondsThisPhase = 0;
   document.getElementById('focus-phase-banner').innerHTML = '';
   updateTimerUI();
 }
@@ -1367,13 +1539,18 @@ function checkCelebration(key, percent){
   lastPercent[key] = percent;
 }
 
-function chartOptions(){
+function chartOptions(yMin){
   return {
     responsive:true,
     maintainAspectRatio:false,
     plugins:{ legend:{ display:false } },
     scales:{
-      y:{ grid:{ color:'#334155' }, ticks:{ color:'#94a3b8' }, beginAtZero:true },
+      y:{
+        grid:{ color:'#334155' },
+        ticks:{ color:'#94a3b8' },
+        beginAtZero: yMin === undefined,
+        min: yMin
+      },
       x:{
         grid:{ display:false },
         ticks:{ color:'#94a3b8', autoSkip:true, maxRotation:45, minRotation:0, maxTicksLimit:10 }
@@ -1414,7 +1591,7 @@ function dismissBackupReminder(){
 }
 
 /* ================= BACKUP (Export / Import) ================= */
-const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'habits-data', 'focus-data', 'game-data'];
+const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'recurring-todo-data', 'habits-data', 'focus-data', 'game-data'];
 
 function showBackupStatus(msg, isError){
   const el = document.getElementById('backup-status');
@@ -1490,3 +1667,11 @@ function importBackup(event){
 document.getElementById('weight-date').value = getTodayKey();
 updateTimerUI();
 loadAll();
+
+/* Sobald der Tab/Bildschirm wieder aktiv wird, Timer sofort neu berechnen -
+   setInterval kann im Hintergrund pausiert/gedrosselt worden sein. */
+document.addEventListener('visibilitychange', () => {
+  if(!document.hidden && timerRunning){
+    tickTimer();
+  }
+});
