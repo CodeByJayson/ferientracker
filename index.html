@@ -219,7 +219,17 @@
         <input type="text" id="todo-text" placeholder="Was steht an?">
         <button onclick="addTodo()">Hinzufügen</button>
       </div>
+      <label class="repeat-checkbox-label">
+        <input type="checkbox" id="todo-repeat-weekly">
+        🔁 Jede Woche an diesem Wochentag wiederholen
+      </label>
       <div class="todo-list" id="todo-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>🔁 Wiederkehrende Aufgaben</h2>
+      <p class="selected-date-label">Läuft automatisch jede Woche am gleichen Wochentag weiter.</p>
+      <div class="todo-list" id="recurring-todo-list"></div>
     </div>
   </div>
 
