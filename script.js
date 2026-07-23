@@ -571,23 +571,39 @@ function saveSleepGoal(){
   renderSleep();
 }
 
+function computeSleepHours(bedTime, wakeTime){
+  const [bh, bm] = bedTime.split(':').map(Number);
+  const [wh, wm] = wakeTime.split(':').map(Number);
+  const bedMinutes = bh * 60 + bm;
+  const wakeMinutes = wh * 60 + wm;
+  let diff = wakeMinutes - bedMinutes;
+  if(diff <= 0) diff += 24 * 60; // über Mitternacht geschlafen
+  return Math.round((diff / 60) * 100) / 100;
+}
+
 function addSleepEntry(){
   const dateInput = document.getElementById('sleep-date');
-  const hoursInput = document.getElementById('sleep-hours');
+  const bedtimeInput = document.getElementById('sleep-bedtime');
+  const waketimeInput = document.getElementById('sleep-waketime');
   const date = dateInput.value || getTodayKey();
-  const hours = parseFloat(hoursInput.value);
+  const bedTime = bedtimeInput.value;
+  const wakeTime = waketimeInput.value;
 
-  if(isNaN(hours) || hours <= 0 || hours > 24){
-    alert('Bitte gib eine gültige Anzahl Stunden ein (0–24).');
+  if(!bedTime || !wakeTime){
+    alert('Bitte gib beide Uhrzeiten ein (ins Bett gegangen & aufgewacht).');
     return;
   }
+
+  const hours = computeSleepHours(bedTime, wakeTime);
+
   const existingIndex = sleepData.entries.findIndex(e => e.date === date);
   if(existingIndex >= 0){
-    sleepData.entries[existingIndex].hours = hours;
+    sleepData.entries[existingIndex] = { date, bedTime, wakeTime, hours };
   } else {
-    sleepData.entries.push({ date, hours });
+    sleepData.entries.push({ date, bedTime, wakeTime, hours });
   }
-  hoursInput.value = '';
+  bedtimeInput.value = '';
+  waketimeInput.value = '';
   renderSleep();
 }
 
