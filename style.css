@@ -40,6 +40,13 @@
 
   .container{ max-width:900px; margin:0 auto; }
 
+  @media (min-width:768px){
+    .container{ max-width:1150px; }
+  }
+  @media (min-width:1200px){
+    .container{ max-width:1400px; }
+  }
+
   header{ text-align:center; margin-bottom:28px; }
 
   .backup-bar{
@@ -330,6 +337,9 @@
   .goal-setup .field{ display:flex; flex-direction:column; gap:4px; }
   .goal-setup .field label{ font-size:12px; color:var(--text-muted); }
 
+  .sleep-time-field{ display:flex; flex-direction:column; gap:4px; }
+  .sleep-time-field label{ font-size:12px; color:var(--text-muted); }
+
   .row-between{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:16px; }
 
   .loading-note{ color:var(--text-muted); font-size:13px; text-align:center; padding:10px; }
@@ -448,7 +458,7 @@
     display:inline-flex;
     align-items:baseline;
     gap:4px;
-    background:#334155;
+    background:transparent;
     border:1px solid var(--border-color);
     color:var(--text-muted);
     padding:8px 14px;
