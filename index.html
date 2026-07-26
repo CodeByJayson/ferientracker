@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ferien-Tracker</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="styles.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -45,9 +45,9 @@
     <button class="tab-btn" data-tab="fahr" onclick="switchTab('fahr')">🚗 Fahrschule</button>
     <button class="tab-btn" data-tab="todo" onclick="switchTab('todo')">✅ To-Dos</button>
     <button class="tab-btn active" data-tab="habit" onclick="switchTab('habit')">🌱 Habits</button>
-    <button class="tab-btn" data-tab="focus" onclick="switchTab('focus')">🧠 Fokus</button>
     <button class="tab-btn" data-tab="sleep" onclick="switchTab('sleep')">😴 Schlaf</button>
     <button class="tab-btn" data-tab="training" onclick="switchTab('training')">🏋️ Training</button>
+    <button class="tab-btn" data-tab="study" onclick="switchTab('study')">📚 Lernen</button>
   </nav>
 
   <div id="loading-note" class="loading-note">Lade deine Daten …</div>
@@ -155,7 +155,7 @@
         <div class="progress-text" id="fahr-progress-text"></div>
       </div>
 
-      <div class="daily-goal-label">Tagesziel: 160 Fragen</div>
+      <div class="daily-goal-label">Tagesziel: 170 Fragen</div>
       <div class="progress-container daily-goal-container">
         <div class="progress-bar fahr-daily-bar" id="fahr-daily-progress-bar"></div>
         <div class="progress-text" id="fahr-daily-progress-text"></div>
@@ -200,6 +200,16 @@
       </div>
       <div id="general-todo-summary" class="selected-date-label"></div>
       <div class="todo-list" id="general-todo-list" style="margin-top:12px;"></div>
+    </div>
+
+    <div class="card goals">
+      <h2>🎯 Meine Ziele</h2>
+      <p class="selected-date-label">Längerfristige Ziele, unabhängig von Tagesaufgaben.</p>
+      <div class="form-group">
+        <input type="text" id="goal-text" placeholder="z.B. Note in Mathe verbessern">
+        <button onclick="addGoal()" class="btn goals">Hinzufügen</button>
+      </div>
+      <div class="todo-list" id="goals-list" style="margin-top:12px;"></div>
     </div>
 
     <div class="card">
@@ -255,77 +265,6 @@
         <button onclick="addBadHabit()">Hinzufügen</button>
       </div>
       <div class="todo-list" id="bad-habits-list" style="margin-top:16px;"></div>
-    </div>
-  </div>
-
-  <!-- FOKUS TAB -->
-  <div id="tab-focus" class="tab-panel focus-tab">
-    <div class="card">
-      <h2>⏱️ Pomodoro-Timer (25 / 5)</h2>
-      <div class="focus-phase-label" id="focus-phase-label">Fokus</div>
-      <div class="focus-timer-display" id="focus-timer-display">25:00</div>
-      <div id="focus-phase-banner"></div>
-      <div class="form-group" style="margin-bottom:12px;">
-        <button id="focus-timer-btn" onclick="toggleFocusTimer()">Start</button>
-        <button class="ghost" onclick="skipFocusPhase()">Überspringen</button>
-        <button class="ghost" onclick="resetFocusTimer()">Zurücksetzen</button>
-      </div>
-      <div class="form-group">
-        <input type="number" id="focus-manual-minutes" placeholder="oder manuell: Minuten">
-        <button onclick="addFocusManual()">Hinzufügen</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row-between"><h2 style="margin-bottom:0;">📊 Dein Fokus</h2></div>
-      <div id="focus-streak-badge"></div>
-      <div class="stats-row" id="focus-stats"></div>
-      <div class="chart-nav">
-        <button class="chart-nav-btn" onclick="shiftFocusChart(1)">◀</button>
-        <span class="chart-range-label" id="focus-range-label"></span>
-        <button class="chart-nav-btn" id="focus-next-btn" onclick="shiftFocusChart(-1)">▶</button>
-      </div>
-      <div class="chart-container" id="focus-chart-container"><canvas id="focusChart"></canvas></div>
-    </div>
-
-    <div class="card">
-      <h2>🎮 Zeitbudget fürs Zocken</h2>
-      <div class="form-group">
-        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:150px;">
-          <label style="font-size:12px; color:var(--text-muted);">Tageslimit (Minuten)</label>
-          <input type="number" id="game-budget" placeholder="z.B. 60">
-        </div>
-        <button onclick="saveGameBudget()">Speichern</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="row-between"><h2 style="margin-bottom:0;">Heute gezockt</h2></div>
-      <div id="game-streak-badge"></div>
-      <div class="stats-row" id="game-stats"></div>
-      <div class="progress-container">
-        <div class="progress-bar game-bar" id="game-progress-bar"></div>
-        <div class="progress-text" id="game-progress-text"></div>
-      </div>
-      <div class="form-group" style="margin-top:16px; margin-bottom:12px;">
-        <button class="quick" onclick="addGameMinutes(15)">+15 Min</button>
-        <button class="quick" onclick="addGameMinutes(30)">+30 Min</button>
-        <button class="quick" onclick="addGameMinutes(60)">+60 Min</button>
-      </div>
-      <div class="form-group">
-        <input type="number" id="game-custom" placeholder="eigene Minuten">
-        <button onclick="addGameCustom()">Hinzufügen</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Verlauf</h2>
-      <div class="chart-nav">
-        <button class="chart-nav-btn" onclick="shiftGameChart(1)">◀</button>
-        <span class="chart-range-label" id="game-range-label"></span>
-        <button class="chart-nav-btn" id="game-next-btn" onclick="shiftGameChart(-1)">▶</button>
-      </div>
-      <div class="chart-container" id="game-chart-container"><canvas id="gameChart"></canvas></div>
     </div>
   </div>
 
@@ -389,7 +328,7 @@
       <div id="gtg-streak-badge"></div>
       <div class="stats-row" id="gtg-stats"></div>
     </div>
-
+    
     <div class="card">
       <h2>Verlauf</h2>
       <div class="chart-nav">
@@ -424,6 +363,50 @@
         <button class="ghost" onclick="markGTGRetested()">✅ Heute erneut getestet</button>
       </div>
       <p class="selected-date-label" id="gtg-last-test-label" style="margin-top:10px; margin-bottom:0;"></p>
+    </div>
+
+    
+  </div>
+
+  <!-- LERNEN TAB (WR Karteikasten + Mathe) -->
+  <div id="tab-study" class="tab-panel study-tab">
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">🎯 Heutiges Ziel</h2>
+      </div>
+      <p class="selected-date-label" id="study-week-label"></p>
+      <div class="stats-row" id="study-goal-stats"></div>
+      <div class="progress-container">
+        <div class="progress-bar study-bar" id="study-wr-progress-bar"></div>
+        <div class="progress-text" id="study-wr-progress-text"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📐 Mathe</h2>
+      <div class="math-check-row">
+        <input type="checkbox" id="math-today-check" onchange="toggleMathToday()">
+        <span class="math-label">Heutige Matheaufgabe erledigt</span>
+        <span id="math-streak-badge"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>✍️ Karteikarte hinzufügen</h2>
+      <p class="selected-date-label">Nur Titel/Nummer deiner analogen Karte – Inhalt bleibt bei dir.</p>
+      <div class="form-group">
+        <input type="text" id="wr-card-title" placeholder="z.B. Karte 12 – Angebot & Nachfrage">
+        <button onclick="addFlashcard()">Hinzufügen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin-bottom:0;">🔁 Karten wiederholen</h2>
+      </div>
+      <div id="wr-streak-badge"></div>
+      <div class="stats-row" id="wr-deck-stats"></div>
+      <div id="wr-due-list" style="margin-top:14px;"></div>
     </div>
   </div>
 </div>
