@@ -9,27 +9,22 @@ let recurringTodos = []; // [{ id, text, weekday(0=So..6=Sa), createdDate, skipp
 let habitsData = { good: [], bad: [] };
 // good: [{ id, name, history: {date:true} }]
 // bad:  [{ id, name, startDate, lastRelapse, best }]
-let focusData = { history: {} };         // { "YYYY-MM-DD": totalMinutes }
-let gameData = { budget: 60, history: {} }; // { "YYYY-MM-DD": minutesPlayed }
-let sleepData = { goalHours: null, entries: [] }; // entries: [{ date, hours }]
+let sleepData = { goalHours: null, entries: [] }; // entries: [{ date, bedTime, wakeTime, hours }]
 let gtgData = {
   targets: { pushups: 8, dips: 5, pullups: 3 },
   maxes: { pushups: 18, dips: 11, pullups: 8 },
   lastTestDate: null,
   history: { pushups: {}, dips: {}, pullups: {} } // je "YYYY-MM-DD": Wiederholungen
 };
+let studyData = {
+  planStartDate: null, // wird beim ersten Laden auf heute gesetzt
+  wrCards: [], // [{ id, title, box(1-5), nextReview, createdDate }]
+  wrNewCardsHistory: {}, // "YYYY-MM-DD": Anzahl neu geschriebener Karten
+  mathHistory: {} // "YYYY-MM-DD": true
+};
+let goalsData = []; // [{ id, text, done }]
+const reviewedTodayIds = new Set(); // nur für diese Sitzung - schon beantwortete Karten ausblenden
 
-const FOCUS_DURATION_SEC = 25 * 60;
-const BREAK_DURATION_SEC = 5 * 60;
-
-let timerRunning = false;
-let timerPhase = 'focus'; // 'focus' | 'break'
-let remainingSeconds = FOCUS_DURATION_SEC;
-let phaseEndTimestamp = null; // ms epoch when the current phase should end (only set while running)
-let timerIntervalId = null;
-
-let focusChart = null;
-let gameChart = null;
 let sleepChart = null;
 let gtgChart = null;
 
@@ -80,8 +75,6 @@ const MAX_CHART_OFFSET = 500; // safety cap: 500 windows of 21 days = ~28 years 
 let historyOffset = 0;
 let weightOffset = 0;
 let fahrOffset = 0;
-let focusOffset = 0;
-let gameOffset = 0;
 let sleepOffset = 0;
 let gtgOffset = 0;
 
@@ -193,16 +186,6 @@ function loadAll(){
   } catch(e){ console.error('Konnte Habit-Daten nicht laden', e); }
 
   try{
-    const fo = localStorage.getItem('focus-data');
-    if(fo){ focusData = JSON.parse(fo); }
-  } catch(e){ console.error('Konnte Fokus-Daten nicht laden', e); }
-
-  try{
-    const g = localStorage.getItem('game-data');
-    if(g){ gameData = JSON.parse(g); }
-  } catch(e){ console.error('Konnte Zocken-Daten nicht laden', e); }
-
-  try{
     const sl = localStorage.getItem('sleep-data');
     if(sl){ sleepData = JSON.parse(sl); }
   } catch(e){ console.error('Konnte Schlaf-Daten nicht laden', e); }
@@ -211,6 +194,19 @@ function loadAll(){
     const gtg = localStorage.getItem('gtg-data');
     if(gtg){ gtgData = JSON.parse(gtg); }
   } catch(e){ console.error('Konnte Trainings-Daten nicht laden', e); }
+
+  try{
+    const st = localStorage.getItem('study-data');
+    if(st){ studyData = JSON.parse(st); }
+  } catch(e){ console.error('Konnte Lern-Daten nicht laden', e); }
+  if(!studyData.planStartDate){
+    studyData.planStartDate = getTodayKey();
+  }
+
+  try{
+    const gl = localStorage.getItem('goals-data');
+    if(gl){ goalsData = JSON.parse(gl); }
+  } catch(e){ console.error('Konnte Ziele nicht laden', e); }
 
   document.getElementById('loading-note').style.display = 'none';
   autoApplyMissedJokers();
@@ -222,11 +218,11 @@ function loadAll(){
   renderTodo();
   renderGeneralTodos();
   renderRecurringList();
+  renderGoals();
   renderHabits();
-  renderFocus();
-  renderGame();
   renderSleep();
   renderGTG();
+  renderStudy();
 }
 
 function saveBooksData(){
@@ -257,13 +253,9 @@ function saveHabitsData(){
   try{ localStorage.setItem('habits-data', JSON.stringify(habitsData)); }
   catch(e){ console.error('Speichern fehlgeschlagen (Habits)', e); }
 }
-function saveFocusData(){
-  try{ localStorage.setItem('focus-data', JSON.stringify(focusData)); }
-  catch(e){ console.error('Speichern fehlgeschlagen (Fokus)', e); }
-}
-function saveGameData(){
-  try{ localStorage.setItem('game-data', JSON.stringify(gameData)); }
-  catch(e){ console.error('Speichern fehlgeschlagen (Zocken)', e); }
+function saveGoalsData(){
+  try{ localStorage.setItem('goals-data', JSON.stringify(goalsData)); }
+  catch(e){ console.error('Speichern fehlgeschlagen (Ziele)', e); }
 }
 function saveSleepData(){
   try{ localStorage.setItem('sleep-data', JSON.stringify(sleepData)); }
@@ -272,6 +264,10 @@ function saveSleepData(){
 function saveGTGData(){
   try{ localStorage.setItem('gtg-data', JSON.stringify(gtgData)); }
   catch(e){ console.error('Speichern fehlgeschlagen (Training)', e); }
+}
+function saveStudyData(){
+  try{ localStorage.setItem('study-data', JSON.stringify(studyData)); }
+  catch(e){ console.error('Speichern fehlgeschlagen (Lernen)', e); }
 }
 
 /* ---------- Tabs ---------- */
@@ -507,7 +503,7 @@ function updateWeightChart(){
 
   if(weightChart) weightChart.destroy();
   const minValue = values.length ? Math.min(...values) : 50;
-  const yMin = Math.min(50, Math.floor(minValue - 2)); // startet bei 50kg, weicht nur aus falls Werte darunter liegen
+  const yMin = Math.min(60, Math.floor(minValue - 2)); // startet bei 50kg, weicht nur aus falls Werte darunter liegen
   weightChart = new Chart(ctx, {
     type:'line',
     data:{ labels, datasets:[{
@@ -607,6 +603,26 @@ function addSleepEntry(){
   renderSleep();
 }
 
+function timeToDecimalHours(timeStr){
+  const [h, m] = timeStr.split(':').map(Number);
+  return h + m / 60;
+}
+
+/* Bettzeiten liegen meist abends/nachts - Zeiten nach Mitternacht (z.B. 00:30)
+   werden auf 24.5 usw. verschoben, damit die Linie nicht von 24 auf 0 zurückspringt. */
+function bedTimeToPlotValue(timeStr){
+  let val = timeToDecimalHours(timeStr);
+  if(val < 12) val += 24;
+  return val;
+}
+
+function formatHourValueAsTime(value){
+  const v = ((value % 24) + 24) % 24;
+  const h = Math.floor(v);
+  const m = Math.round((v - h) * 60);
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
 function updateSleepChart(){
   const ctx = document.getElementById('sleepChart').getContext('2d');
   const allEntries = sleepData.entries.slice().sort((a,b) => a.date.localeCompare(b.date));
@@ -623,7 +639,8 @@ function updateSleepChart(){
     const [y,m,d] = e.date.split('-');
     return `${d}.${m}.`;
   }) : ['Heute'];
-  const values = windowEntries.length ? windowEntries.map(e => e.hours) : [0];
+  const bedValues = windowEntries.length ? windowEntries.map(e => e.bedTime ? bedTimeToPlotValue(e.bedTime) : null) : [null];
+  const wakeValues = windowEntries.length ? windowEntries.map(e => e.wakeTime ? timeToDecimalHours(e.wakeTime) : null) : [null];
 
   const rangeLabel = windowEntries.length
     ? `${windowEntries[0].date.split('-').reverse().join('.')} – ${windowEntries[windowEntries.length-1].date.split('-').reverse().join('.')}`
@@ -634,13 +651,42 @@ function updateSleepChart(){
 
   if(sleepChart) sleepChart.destroy();
   sleepChart = new Chart(ctx, {
-    type:'bar',
-    data:{ labels, datasets:[{
-      label:'Schlafstunden', data: values,
-      backgroundColor:'rgba(59,130,246,.6)',
-      borderColor:'#3b82f6', borderWidth:1, borderRadius:6
-    }]},
-    options: chartOptions()
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {
+          label:'Ins Bett', data: bedValues,
+          borderColor:'#8b5cf6', backgroundColor:'rgba(139,92,246,.1)',
+          borderWidth:3, fill:false, tension:.3,
+          pointBackgroundColor:'#c4b5fd', pointRadius:4, spanGaps:true
+        },
+        {
+          label:'Aufgewacht', data: wakeValues,
+          borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.1)',
+          borderWidth:3, fill:false, tension:.3,
+          pointBackgroundColor:'#fde68a', pointRadius:4, spanGaps:true
+        }
+      ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      plugins:{
+        legend:{ display:true, position:'bottom', labels:{ color:'#94a3b8', boxWidth:12, font:{ size:11 } } },
+        tooltip:{ callbacks:{ label: ctx => `${ctx.dataset.label}: ${formatHourValueAsTime(ctx.parsed.y)}` } }
+      },
+      scales:{
+        y:{
+          grid:{ color:'#334155' },
+          ticks:{ color:'#94a3b8', stepSize:2, callback: value => formatHourValueAsTime(value) }
+        },
+        x:{
+          grid:{ display:false },
+          ticks:{ color:'#94a3b8', autoSkip:true, maxRotation:45, minRotation:0, maxTicksLimit:10 }
+        }
+      }
+    }
   });
 }
 
@@ -667,7 +713,7 @@ function renderFahr(){
   document.getElementById('fahr-total').value = fahrData.total;
 
   // Tagesziel: 160 Fragen pro Tag
-  const DAILY_GOAL = 160;
+  const DAILY_GOAL = 170;
   const todayKey = getTodayKey();
   const doneToday = fahrData.history[todayKey] || 0;
   const dailyPercent = Math.min(100, Math.round((doneToday / DAILY_GOAL) * 100));
@@ -1066,6 +1112,46 @@ function deleteGeneralTodo(id){
   renderGeneralTodos();
 }
 
+/* ================= ZIELE ================= */
+function renderGoals(){
+  const list = document.getElementById('goals-list');
+  if(goalsData.length === 0){
+    list.innerHTML = '<p class="empty-state">Noch keine Ziele eingetragen.</p>';
+    saveGoalsData();
+    return;
+  }
+
+  list.innerHTML = goalsData.map(goal => `
+    <div class="todo-item ${goal.done ? 'done' : ''}">
+      <input type="checkbox" ${goal.done ? 'checked' : ''} onchange="toggleGoal('${goal.id}')">
+      <span class="todo-text">${goal.text}</span>
+      <button class="delete-btn" onclick="deleteGoal('${goal.id}')">Löschen</button>
+    </div>
+  `).join('');
+
+  saveGoalsData();
+}
+
+function addGoal(){
+  const input = document.getElementById('goal-text');
+  const text = input.value.trim();
+  if(!text) return;
+  goalsData.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2,6), text, done: false });
+  input.value = '';
+  renderGoals();
+}
+
+function toggleGoal(id){
+  const goal = goalsData.find(g => g.id === id);
+  if(goal) goal.done = !goal.done;
+  renderGoals();
+}
+
+function deleteGoal(id){
+  goalsData = goalsData.filter(g => g.id !== id);
+  renderGoals();
+}
+
 /* ================= HABITS ================= */
 function daysSince(dateStr){
   const [y,m,d] = dateStr.split('-').map(Number);
@@ -1382,305 +1468,6 @@ function saveEditBadHabit(id){
   renderHabits();
 }
 
-/* ================= POMODORO FOKUS-TIMER (25 / 5) ================= */
-/* Der Timer rechnet über echte Zeitstempel (Date.now()), nicht über reines
-   Hochzählen der Sekunden. Browser drosseln setInterval stark, wenn der Tab
-   im Hintergrund ist oder der Bildschirm gesperrt wird - mit Zeitstempeln
-   zeigt die Anzeige trotzdem den korrekten Stand, sobald man zurückkommt,
-   statt einfach stehen zu bleiben oder falsch weiterzulaufen. */
-function formatTimer(totalSeconds){
-  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
-  const ss = String(totalSeconds % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
-}
-
-function currentPhaseDuration(){
-  return timerPhase === 'focus' ? FOCUS_DURATION_SEC : BREAK_DURATION_SEC;
-}
-
-function updateTimerUI(){
-  const display = document.getElementById('focus-timer-display');
-  const label = document.getElementById('focus-phase-label');
-  display.innerText = formatTimer(remainingSeconds);
-  label.innerText = timerPhase === 'focus' ? 'Fokus' : 'Pause';
-  display.classList.toggle('break', timerPhase === 'break');
-  label.classList.toggle('break', timerPhase === 'break');
-}
-
-function showPhaseBanner(msg){
-  const el = document.getElementById('focus-phase-banner');
-  el.innerHTML = `<div class="celebration">${msg}</div>`;
-}
-
-/* Wechselt die Phase und verschiebt den Ziel-Zeitstempel exakt um die neue
-   Phasendauer weiter (statt "jetzt + Dauer"), damit sich auch nach mehreren
-   automatisch nachgeholten Phasen kein Fehler aufsummiert. */
-function completePhaseTransition(){
-  if(timerPhase === 'focus'){
-    logFocusMinutes(25);
-    showPhaseBanner('🎉 25 Minuten Fokus geschafft! Zeit für 5 Minuten Pause.');
-    timerPhase = 'break';
-    phaseEndTimestamp += BREAK_DURATION_SEC * 1000;
-  } else {
-    showPhaseBanner('✅ Pause vorbei! Nächster Fokus-Block startet.');
-    timerPhase = 'focus';
-    phaseEndTimestamp += FOCUS_DURATION_SEC * 1000;
-  }
-}
-
-function tickTimer(){
-  if(!timerRunning || phaseEndTimestamp === null) return;
-
-  let secLeft = Math.round((phaseEndTimestamp - Date.now()) / 1000);
-  const MAX_CATCHUP = 50; // Sicherheitsgrenze für den Fall, dass der Tab SEHR lange im Hintergrund war
-  let guard = 0;
-  while(secLeft <= 0 && guard < MAX_CATCHUP){
-    completePhaseTransition();
-    secLeft = Math.round((phaseEndTimestamp - Date.now()) / 1000);
-    guard++;
-  }
-
-  remainingSeconds = Math.max(0, secLeft);
-  updateTimerUI();
-}
-
-function toggleFocusTimer(){
-  const btn = document.getElementById('focus-timer-btn');
-  if(!timerRunning){
-    timerRunning = true;
-    phaseEndTimestamp = Date.now() + remainingSeconds * 1000;
-    btn.innerText = 'Pause';
-    timerIntervalId = setInterval(tickTimer, 1000);
-    tickTimer();
-  } else {
-    if(phaseEndTimestamp !== null){
-      remainingSeconds = Math.max(0, Math.round((phaseEndTimestamp - Date.now()) / 1000));
-    }
-    timerRunning = false;
-    phaseEndTimestamp = null;
-    btn.innerText = 'Weiter';
-    clearInterval(timerIntervalId);
-  }
-}
-
-function skipFocusPhase(){
-  clearInterval(timerIntervalId);
-  if(timerRunning && phaseEndTimestamp !== null){
-    remainingSeconds = Math.max(0, Math.round((phaseEndTimestamp - Date.now()) / 1000));
-  }
-  timerRunning = false;
-  phaseEndTimestamp = null;
-  document.getElementById('focus-timer-btn').innerText = 'Start';
-
-  const elapsedSeconds = currentPhaseDuration() - remainingSeconds;
-
-  if(timerPhase === 'focus'){
-    const minutes = Math.round(elapsedSeconds / 60);
-    if(minutes > 0) logFocusMinutes(minutes);
-    showPhaseBanner('⏭️ Fokus übersprungen. Zeit für 5 Minuten Pause.');
-    timerPhase = 'break';
-    remainingSeconds = BREAK_DURATION_SEC;
-  } else {
-    showPhaseBanner('⏭️ Pause übersprungen. Nächster Fokus-Block startet.');
-    timerPhase = 'focus';
-    remainingSeconds = FOCUS_DURATION_SEC;
-  }
-  updateTimerUI();
-}
-
-function resetFocusTimer(){
-  clearInterval(timerIntervalId);
-  if(timerRunning && phaseEndTimestamp !== null){
-    remainingSeconds = Math.max(0, Math.round((phaseEndTimestamp - Date.now()) / 1000));
-  }
-  timerRunning = false;
-  phaseEndTimestamp = null;
-  document.getElementById('focus-timer-btn').innerText = 'Start';
-
-  if(timerPhase === 'focus'){
-    const elapsedSeconds = FOCUS_DURATION_SEC - remainingSeconds;
-    if(elapsedSeconds >= 30){
-      logFocusMinutes(Math.round(elapsedSeconds / 60));
-    }
-  }
-
-  timerPhase = 'focus';
-  remainingSeconds = FOCUS_DURATION_SEC;
-  document.getElementById('focus-phase-banner').innerHTML = '';
-  updateTimerUI();
-}
-
-function logFocusMinutes(n){
-  const today = getTodayKey();
-  focusData.history[today] = (focusData.history[today] || 0) + n;
-  renderFocus();
-}
-
-function addFocusManual(){
-  const input = document.getElementById('focus-manual-minutes');
-  const n = parseInt(input.value);
-  if(isNaN(n) || n <= 0){
-    alert('Bitte gib eine gültige Minutenzahl ein.');
-    return;
-  }
-  logFocusMinutes(n);
-  input.value = '';
-}
-
-function renderFocus(){
-  const todayKey = getTodayKey();
-  const todayMinutes = focusData.history[todayKey] || 0;
-  const weekTotal = sumLastNDays(focusData.history, 7);
-  const streak = computeStreak(focusData.history);
-
-  document.getElementById('focus-stats').innerHTML = `
-    <div class="stat-box"><div class="num">${todayMinutes} Min</div><div class="label">Heute</div></div>
-    <div class="stat-box"><div class="num">${weekTotal} Min</div><div class="label">Letzte 7 Tage</div></div>
-  `;
-
-  document.getElementById('focus-streak-badge').innerHTML = streak > 0
-    ? `<div class="streak-badge" style="background:rgba(14,165,233,.12); color:#7dd3fc;">🔥 ${streak} Tag${streak===1?'':'e'} in Folge fokussiert</div>`
-    : '';
-
-  updateFocusChart();
-  saveFocusData();
-}
-
-function updateFocusChart(){
-  const ctx = document.getElementById('focusChart').getContext('2d');
-  const { labels, values, rangeLabel } = getChartWindow(focusData.history, focusOffset);
-  document.getElementById('focus-range-label').innerText = rangeLabel;
-  updateNavButtons('focus-next-btn', focusOffset);
-  attachSwipe('focus-chart-container', () => shiftFocusChart(1), () => shiftFocusChart(-1));
-  if(focusChart) focusChart.destroy();
-  focusChart = new Chart(ctx, {
-    type:'bar',
-    data:{ labels, datasets:[{
-      label:'Fokus-Minuten', data: values,
-      backgroundColor:'rgba(14,165,233,.6)',
-      borderColor:'#0ea5e9', borderWidth:1, borderRadius:6
-    }]},
-    options: chartOptions()
-  });
-}
-
-function shiftFocusChart(delta){
-  focusOffset = Math.max(0, Math.min(MAX_CHART_OFFSET, focusOffset + delta));
-  updateFocusChart();
-}
-
-/* ================= ZOCKEN-ZEITBUDGET ================= */
-function computeBudgetStreak(history, budget){
-  let streak = 0;
-  let cursor = new Date();
-
-  // Wir holen uns alle vorhandenen Tage aus der Historie
-  const historyKeys = Object.keys(history);
-  if (historyKeys.length === 0) return 0; // Falls die Historie leer ist, direkt 0 zurückgeben
-
-  while(true){
-    const key = `${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`;
-
-    // WICHTIG: Prüfen, ob für diesen Tag überhaupt Daten existieren
-    if (!(key in history)) {
-      // Wenn es den Tag in der Historie nicht gibt, brechen wir ab,
-      // anstatt unendlich weit in die Vergangenheit zu rechnen.
-      break;
-    }
-
-    const val = history[key];
-
-    if(val <= budget){
-      streak++;
-      cursor.setDate(cursor.getDate() - 1);
-    } else {
-      break; // Budget überschritten -> Streak vorbei
-    }
-  }
-  return streak;
-}
-
-function saveGameBudget(){
-  const budget = parseInt(document.getElementById('game-budget').value);
-  if(isNaN(budget) || budget <= 0){
-    alert('Bitte gib ein gültiges Tageslimit ein.');
-    return;
-  }
-  gameData.budget = budget;
-  renderGame();
-}
-
-function addGameMinutes(n){
-  const today = getTodayKey();
-  gameData.history[today] = (gameData.history[today] || 0) + n;
-  renderGame();
-}
-
-function addGameCustom(){
-  const input = document.getElementById('game-custom');
-  const n = parseInt(input.value);
-  if(isNaN(n) || n <= 0){
-    alert('Bitte gib eine gültige Minutenzahl ein.');
-    return;
-  }
-  addGameMinutes(n);
-  input.value = '';
-}
-
-function renderGame(){
-  document.getElementById('game-budget').value = gameData.budget;
-
-  const todayKey = getTodayKey();
-  const playedToday = gameData.history[todayKey] || 0;
-  const percent = gameData.budget > 0 ? Math.round((playedToday / gameData.budget) * 100) : 0;
-  const remaining = gameData.budget - playedToday;
-
-  document.getElementById('game-stats').innerHTML = `
-    <div class="stat-box"><div class="num">${playedToday} Min</div><div class="label">Heute gespielt</div></div>
-    <div class="stat-box"><div class="num">${gameData.budget} Min</div><div class="label">Tageslimit</div></div>
-    <div class="stat-box"><div class="num">${remaining >= 0 ? remaining : Math.abs(remaining)} Min</div><div class="label">${remaining >= 0 ? 'Übrig' : 'Über Limit'}</div></div>
-  `;
-
-  const bar = document.getElementById('game-progress-bar');
-  bar.style.width = Math.min(percent, 100) + '%';
-  bar.classList.toggle('over-budget', percent > 100);
-  document.getElementById('game-progress-text').innerText = percent > 100
-    ? `${percent}% des Limits – heute drüber`
-    : `${percent}% des Tageslimits genutzt`;
-
-  const streak = computeBudgetStreak(gameData.history, gameData.budget);
-  document.getElementById('game-streak-badge').innerHTML = streak > 0
-    ? `<div class="streak-badge" style="background:rgba(14,165,233,.12); color:#7dd3fc;">🔥 ${streak} Tag${streak===1?'':'e'} im Limit geblieben</div>`
-    : '';
-
-  updateGameChart();
-  saveGameData();
-}
-
-function updateGameChart(){
-  const ctx = document.getElementById('gameChart').getContext('2d');
-  const { labels, values, rangeLabel } = getChartWindow(gameData.history, gameOffset);
-  document.getElementById('game-range-label').innerText = rangeLabel;
-  updateNavButtons('game-next-btn', gameOffset);
-  attachSwipe('game-chart-container', () => shiftGameChart(1), () => shiftGameChart(-1));
-  const colors = values.map(v => v > gameData.budget ? 'rgba(239,68,68,.7)' : 'rgba(14,165,233,.6)');
-  if(gameChart) gameChart.destroy();
-  gameChart = new Chart(ctx, {
-    type:'bar',
-    data:{ labels, datasets:[{
-      label:'Gezockte Minuten', data: values,
-      backgroundColor: colors,
-      borderColor:'#0ea5e9', borderWidth:1, borderRadius:6
-    }]},
-    options: chartOptions()
-  });
-}
-
-function shiftGameChart(delta){
-  gameOffset = Math.max(0, Math.min(MAX_CHART_OFFSET, gameOffset + delta));
-  updateGameChart();
-}
-
 /* ================= TRAINING (GTG - Grease the Groove) ================= */
 const GTG_EXERCISES = [
   { key: 'pushups', name: '💪 Liegestütze' },
@@ -1862,6 +1649,145 @@ function shiftGTGChart(delta){
   updateGTGChart();
 }
 
+/* ================= LERNEN (WR-Karteikasten + Mathe) ================= */
+/* Leitner-System: richtig beantwortet -> höhere Box, längere Pause bis zur
+   nächsten Wiederholung. Falsch -> zurück auf Box 1. */
+const WR_BOX_INTERVALS = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 14 };
+
+function addDaysToKey(dateKeyStr, days){
+  const [y, m, d] = dateKeyStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+
+/* Wöchentliches WR-Ziel: diese Kalenderwoche (Mo-So) = 1 neue Karte/Tag,
+   die Woche danach 2, danach 3, usw. - basierend auf dem Plan-Startdatum. */
+function computeStudyWeekNumber(){
+  const startMonday = getWeekKey(studyData.planStartDate);
+  const todayMonday = getWeekKey(getTodayKey());
+  const [sy, sm, sd] = startMonday.split('-').map(Number);
+  const [ty, tm, td] = todayMonday.split('-').map(Number);
+  const diffDays = Math.round((new Date(ty, tm-1, td) - new Date(sy, sm-1, sd)) / 86400000);
+  return Math.max(1, Math.floor(diffDays / 7) + 1);
+}
+
+function renderStudy(){
+  renderStudyGoal();
+  renderMath();
+  renderWRDeck();
+  saveStudyData();
+}
+
+function renderStudyGoal(){
+  const weekNum = computeStudyWeekNumber();
+  const goal = weekNum; // Woche 1 -> 1 Karte/Tag, Woche 2 -> 2, ...
+  const todayKey = getTodayKey();
+  const todayNew = studyData.wrNewCardsHistory[todayKey] || 0;
+  const percent = Math.min(100, Math.round((todayNew / goal) * 100));
+
+  document.getElementById('study-week-label').innerText = `Woche ${weekNum} deines Plans · Mathe bleibt konstant bei 1 Aufgabe/Tag`;
+  document.getElementById('study-goal-stats').innerHTML = `
+    <div class="stat-box"><div class="num">${todayNew} / ${goal}</div><div class="label">Neue WR-Karten heute</div></div>
+    <div class="stat-box"><div class="num">${goal}</div><div class="label">Tagesziel diese Woche</div></div>
+  `;
+  document.getElementById('study-wr-progress-bar').style.width = percent + '%';
+  document.getElementById('study-wr-progress-text').innerText = todayNew >= goal
+    ? '🎉 Tagesziel erreicht!'
+    : `${todayNew} / ${goal} neue Karten heute`;
+}
+
+function toggleMathToday(){
+  const todayKey = getTodayKey();
+  const checkbox = document.getElementById('math-today-check');
+  if(checkbox.checked){
+    studyData.mathHistory[todayKey] = true;
+  } else {
+    delete studyData.mathHistory[todayKey];
+  }
+  renderMath();
+  saveStudyData();
+}
+
+function renderMath(){
+  const todayKey = getTodayKey();
+  document.getElementById('math-today-check').checked = !!studyData.mathHistory[todayKey];
+  const streak = computeStreak(studyData.mathHistory);
+  document.getElementById('math-streak-badge').innerHTML = streak > 0
+    ? `<span class="streak-badge">🔥 ${streak} Tag${streak===1?'':'e'} in Folge</span>`
+    : '';
+}
+
+function addFlashcard(){
+  const input = document.getElementById('wr-card-title');
+  const title = input.value.trim();
+  if(!title) return;
+
+  const todayKey = getTodayKey();
+  studyData.wrCards.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    title,
+    box: 1,
+    nextReview: addDaysToKey(todayKey, 1), // erste Wiederholung morgen
+    createdDate: todayKey
+  });
+  studyData.wrNewCardsHistory[todayKey] = (studyData.wrNewCardsHistory[todayKey] || 0) + 1;
+
+  input.value = '';
+  renderStudyGoal();
+  renderWRDeck();
+  saveStudyData();
+}
+
+function reviewCard(id, correct){
+  const card = studyData.wrCards.find(c => c.id === id);
+  if(!card) return;
+
+  card.box = correct ? Math.min(5, card.box + 1) : 1;
+  card.nextReview = addDaysToKey(getTodayKey(), WR_BOX_INTERVALS[card.box]);
+  reviewedTodayIds.add(id);
+
+  renderWRDeck();
+  saveStudyData();
+}
+
+function renderWRDeck(){
+  const todayKey = getTodayKey();
+  const dueCards = studyData.wrCards
+    .filter(c => c.nextReview <= todayKey && !reviewedTodayIds.has(c.id))
+    .sort((a, b) => a.nextReview.localeCompare(b.nextReview));
+
+  const masteredCount = studyData.wrCards.filter(c => c.box === 5).length;
+
+  document.getElementById('wr-deck-stats').innerHTML = `
+    <div class="stat-box"><div class="num">${studyData.wrCards.length}</div><div class="label">Karten insgesamt</div></div>
+    <div class="stat-box"><div class="num">${dueCards.length}</div><div class="label">Heute fällig</div></div>
+    <div class="stat-box"><div class="num">${masteredCount}</div><div class="label">Gemeistert (Box 5)</div></div>
+  `;
+
+  const streak = computeStreak(studyData.wrNewCardsHistory);
+  document.getElementById('wr-streak-badge').innerHTML = streak > 0
+    ? `<div class="streak-badge" style="background:rgba(34,197,94,.12); color:#86efac;">🔥 ${streak} Tag${streak===1?'':'e'} in Folge neue Karten geschrieben</div>`
+    : '';
+
+  const list = document.getElementById('wr-due-list');
+  if(dueCards.length === 0){
+    list.innerHTML = '<p class="empty-state">Keine Karten heute fällig 🎉</p>';
+    return;
+  }
+
+  list.innerHTML = dueCards.map(card => `
+    <div class="flashcard-item">
+      <span class="flashcard-title">${card.title}</span>
+      <span class="flashcard-box-badge">Box ${card.box}</span>
+      <div class="flashcard-actions">
+        <button class="flashcard-correct-btn" onclick="reviewCard('${card.id}', true)">Gewusst ✅</button>
+        <button class="flashcard-wrong-btn" onclick="reviewCard('${card.id}', false)">Nochmal üben ❌</button>
+      </div>
+    </div>
+  `).join('');
+}
+
 /* ================= Celebration & shared chart options ================= */
 const lastPercent = { weight: -1, fahr: -1 };
 function checkCelebration(key, percent){
@@ -1930,7 +1856,7 @@ function dismissBackupReminder(){
 }
 
 /* ================= BACKUP (Export / Import) ================= */
-const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'recurring-todo-data', 'habits-data', 'focus-data', 'game-data', 'sleep-data', 'gtg-data'];
+const BACKUP_KEYS = ['books-data', 'weight-data', 'fahr-data', 'todo-data', 'general-todo-data', 'recurring-todo-data', 'habits-data', 'sleep-data', 'gtg-data', 'study-data', 'goals-data'];
 
 function showBackupStatus(msg, isError){
   const el = document.getElementById('backup-status');
@@ -2005,13 +1931,4 @@ function importBackup(event){
 /* ---------- Init ---------- */
 document.getElementById('weight-date').value = getTodayKey();
 document.getElementById('sleep-date').value = getTodayKey();
-updateTimerUI();
 loadAll();
-
-/* Sobald der Tab/Bildschirm wieder aktiv wird, Timer sofort neu berechnen -
-   setInterval kann im Hintergrund pausiert/gedrosselt worden sein. */
-document.addEventListener('visibilitychange', () => {
-  if(!document.hidden && timerRunning){
-    tickTimer();
-  }
-});
