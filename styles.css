@@ -16,12 +16,12 @@
     --todo-color-2:#0891b2;
     --habit-color:#8b5cf6;
     --habit-color-2:#7c3aed;
-    --focus-color:#0ea5e9;
-    --focus-color-2:#0284c7;
     --sleep-color:#3b82f6;
     --sleep-color-2:#2563eb;
     --training-color:#f43f5e;
     --training-color-2:#e11d48;
+    --study-color:#22c55e;
+    --study-color-2:#16a34a;
 
     --danger-color:#ef4444;
     --danger-hover:#dc2626;
@@ -155,9 +155,9 @@
   .tab-btn.active[data-tab="fahr"]{ box-shadow:inset 0 -3px 0 var(--fahr-color); }
   .tab-btn.active[data-tab="todo"]{ box-shadow:inset 0 -3px 0 var(--todo-color); }
   .tab-btn.active[data-tab="habit"]{ box-shadow:inset 0 -3px 0 var(--habit-color); }
-  .tab-btn.active[data-tab="focus"]{ box-shadow:inset 0 -3px 0 var(--focus-color); }
   .tab-btn.active[data-tab="sleep"]{ box-shadow:inset 0 -3px 0 var(--sleep-color); }
   .tab-btn.active[data-tab="training"]{ box-shadow:inset 0 -3px 0 var(--training-color); }
+  .tab-btn.active[data-tab="study"]{ box-shadow:inset 0 -3px 0 var(--study-color); }
 
   .tab-panel{ display:none; }
   .tab-panel.active{ display:block; animation:fadeIn .25s ease; }
@@ -213,12 +213,12 @@
   .todo-tab button:hover{ background-color:var(--todo-color-2); }
   .habit-tab button{ background-color:var(--habit-color); }
   .habit-tab button:hover{ background-color:var(--habit-color-2); }
-  .focus-tab button{ background-color:var(--focus-color); }
-  .focus-tab button:hover{ background-color:var(--focus-color-2); }
   .sleep-tab button{ background-color:var(--sleep-color); }
   .sleep-tab button:hover{ background-color:var(--sleep-color-2); }
   .training-tab button{ background-color:var(--training-color); }
   .training-tab button:hover{ background-color:var(--training-color-2); }
+  .study-tab button{ background-color:var(--study-color); }
+  .study-tab button:hover{ background-color:var(--study-color-2); }
 
   button.delete-btn{
     background-color:transparent;
@@ -254,11 +254,9 @@
   .progress-bar.books-bar{ background:linear-gradient(90deg, var(--books-color), var(--books-color-2)); }
   .progress-bar.weight-bar{ background:linear-gradient(90deg, var(--weight-color), var(--weight-color-2)); }
   .progress-bar.fahr-bar{ background:linear-gradient(90deg, var(--fahr-color), var(--fahr-color-2)); }
-  .progress-bar.focus-bar{ background:linear-gradient(90deg, var(--focus-color), var(--focus-color-2)); }
-  .progress-bar.game-bar{ background:linear-gradient(90deg, var(--focus-color), var(--focus-color-2)); }
-  .progress-bar.game-bar.over-budget{ background:linear-gradient(90deg, var(--danger-color), var(--danger-hover)); }
   .progress-bar.sleep-bar{ background:linear-gradient(90deg, var(--sleep-color), var(--sleep-color-2)); }
   .progress-bar.training-bar{ background:linear-gradient(90deg, var(--training-color), var(--training-color-2)); }
+  .progress-bar.study-bar{ background:linear-gradient(90deg, var(--study-color), var(--study-color-2)); }
   .progress-text{ position:absolute; width:100%; text-align:center; top:0; left:0; font-size:13px; line-height:24px; color:white; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.4); }
   .track-section{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .track-section label{ color:var(--text-muted); font-size:13px; }
@@ -458,7 +456,7 @@
     display:inline-flex;
     align-items:baseline;
     gap:4px;
-    background:transparent;
+    background:#334155;
     border:1px solid var(--border-color);
     color:var(--text-muted);
     padding:8px 14px;
@@ -543,28 +541,6 @@
   .habit-edit-form input[type="text"]{ flex:1; min-width:140px; }
   .habit-edit-form input[type="time"]{ max-width:120px; }
 
-  /* Focus timer */
-  .focus-timer-display{
-    font-size:3rem;
-    font-weight:700;
-    text-align:center;
-    letter-spacing:2px;
-    color:var(--focus-color);
-    margin-bottom:18px;
-    font-variant-numeric:tabular-nums;
-  }
-  .focus-phase-label{
-    text-align:center;
-    font-size:13px;
-    font-weight:700;
-    letter-spacing:.08em;
-    text-transform:uppercase;
-    color:var(--focus-color);
-    margin-bottom:4px;
-  }
-  .focus-phase-label.break{ color:#34d399; }
-  .focus-timer-display.break{ color:#34d399; }
-
   /* Training / GTG */
   .gtg-today-highlight{
     background:rgba(244,63,94,.1);
@@ -641,3 +617,55 @@
   .gtg-exercise-row .gtg-exercise-name{ font-weight:700; min-width:120px; }
   .gtg-exercise-row .gtg-today-total{ font-size:12px; color:var(--text-muted); white-space:nowrap; }
   .gtg-exercise-row input[type="number"]{ max-width:110px; }
+
+  /* Lernen: Karteikarten & Mathe */
+  .flashcard-item{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    flex-wrap:wrap;
+    background:var(--card-bg-soft);
+    border:1px solid var(--border-color);
+    border-radius:12px;
+    padding:14px 16px;
+    margin-bottom:10px;
+  }
+  .flashcard-title{ font-weight:700; font-size:14px; flex:1; min-width:140px; }
+  .flashcard-box-badge{
+    font-size:11px;
+    font-weight:700;
+    color:#86efac;
+    background:rgba(34,197,94,.12);
+    border-radius:6px;
+    padding:3px 9px;
+    white-space:nowrap;
+  }
+  .flashcard-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .flashcard-actions button{ font-size:13px; padding:8px 14px; }
+  .flashcard-correct-btn{ background-color:#16a34a; }
+  .flashcard-correct-btn:hover{ background-color:#15803d; }
+  .flashcard-wrong-btn{ background:transparent; border:1px solid var(--danger-color); color:var(--danger-color); }
+  .flashcard-wrong-btn:hover{ background-color:var(--danger-color); color:white; }
+
+  .math-check-row{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    background:var(--card-bg-soft);
+    border:1px solid var(--border-color);
+    border-radius:12px;
+    padding:16px 18px;
+  }
+  .math-check-row input[type="checkbox"]{ width:22px; height:22px; accent-color:var(--study-color); cursor:pointer; }
+  .math-check-row .math-label{ font-weight:600; flex:1; }
+
+
+
+  .card.goals {
+    background: rgba(0, 128, 0, 0.123);
+    border: 2px solid green;
+  }
+  .btn.goals {
+    background: rgb(0, 128, 0);
+    border: 2px solid green;
+  }
