@@ -20,6 +20,7 @@
   <header>
     <h1>🌴 Ferien-Tracker</h1>
     <p id="current-date"></p>
+    <p id="school-countdown" class="school-countdown"></p>
   </header>
 
   <div class="today-widget card">
@@ -202,12 +203,12 @@
       <div class="todo-list" id="general-todo-list" style="margin-top:12px;"></div>
     </div>
 
-    <div class="card goals">
-      <h2>🎯 Meine Ziele</h2>
+    <div class="card goals-card">
+      <h2>⭐ Meine Ziele</h2>
       <p class="selected-date-label">Längerfristige Ziele, unabhängig von Tagesaufgaben.</p>
       <div class="form-group">
         <input type="text" id="goal-text" placeholder="z.B. Note in Mathe verbessern">
-        <button onclick="addGoal()" class="btn goals">Hinzufügen</button>
+        <button onclick="addGoal()">Hinzufügen</button>
       </div>
       <div class="todo-list" id="goals-list" style="margin-top:12px;"></div>
     </div>
@@ -328,16 +329,6 @@
       <div id="gtg-streak-badge"></div>
       <div class="stats-row" id="gtg-stats"></div>
     </div>
-    
-    <div class="card">
-      <h2>Verlauf</h2>
-      <div class="chart-nav">
-        <button class="chart-nav-btn" onclick="shiftGTGChart(1)">◀</button>
-        <span class="chart-range-label" id="gtg-range-label"></span>
-        <button class="chart-nav-btn" id="gtg-next-btn" onclick="shiftGTGChart(-1)">▶</button>
-      </div>
-      <div class="chart-container" id="gtg-chart-container"><canvas id="gtgChart"></canvas></div>
-    </div>
 
     <div class="card">
       <h2>📅 Dein GTG-Wochenplan</h2>
@@ -365,7 +356,15 @@
       <p class="selected-date-label" id="gtg-last-test-label" style="margin-top:10px; margin-bottom:0;"></p>
     </div>
 
-    
+    <div class="card">
+      <h2>Verlauf</h2>
+      <div class="chart-nav">
+        <button class="chart-nav-btn" onclick="shiftGTGChart(1)">◀</button>
+        <span class="chart-range-label" id="gtg-range-label"></span>
+        <button class="chart-nav-btn" id="gtg-next-btn" onclick="shiftGTGChart(-1)">▶</button>
+      </div>
+      <div class="chart-container" id="gtg-chart-container"><canvas id="gtgChart"></canvas></div>
+    </div>
   </div>
 
   <!-- LERNEN TAB (WR Karteikasten + Mathe) -->
