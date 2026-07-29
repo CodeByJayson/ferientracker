@@ -47,6 +47,43 @@ document.getElementById('current-date').innerText = new Date().toLocaleDateStrin
   weekday:'long', year:'numeric', month:'long', day:'numeric'
 });
 
+/* Live-Countdown bis Schulbeginn (17. August) */
+function renderSchoolCountdown() {
+  const now = new Date();
+  let schoolStart = new Date(now.getFullYear(), 7, 17, 0, 0, 0); // Monat 7 = August (0-indexiert)
+
+  // Falls der 17. August dieses Jahr schon vorbei ist, nimm das nächste Jahr
+  if (schoolStart < now) {
+    schoolStart = new Date(now.getFullYear() + 1, 7, 17, 0, 0, 0);
+  }
+
+  const diffMs = schoolStart - now;
+  const el = document.getElementById('school-countdown');
+
+  if (!el) return;
+
+  if (diffMs <= 0) {
+    el.innerText = '📚 Heute geht die Schule wieder los!';
+    return;
+  }
+
+  // Umrechnung der Verbleibenden Millisekunden
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+  // Formatierung für saubere Textausgabe
+  el.innerText = `📚 Noch ${days} Tag${days === 1 ? '' : 'e'}, ` +
+                 `${hours} Std., ${minutes} Min. und ${seconds} Sek. bis Schulbeginn`;
+}
+
+// Erster Aufruf sofort beim Laden
+renderSchoolCountdown();
+
+// Jede Sekunde (1000 ms) aktualisieren
+setInterval(renderSchoolCountdown, 1000);
+
 /* Streak: count consecutive days (including today or yesterday) present as keys in a history object */
 function computeStreak(historyObj){
   const keys = Object.keys(historyObj).filter(k => historyObj[k] > 0);
@@ -503,7 +540,7 @@ function updateWeightChart(){
 
   if(weightChart) weightChart.destroy();
   const minValue = values.length ? Math.min(...values) : 50;
-  const yMin = Math.min(60, Math.floor(minValue - 2)); // startet bei 50kg, weicht nur aus falls Werte darunter liegen
+  const yMin = Math.min(50, Math.floor(minValue - 2)); // startet bei 50kg, weicht nur aus falls Werte darunter liegen
   weightChart = new Chart(ctx, {
     type:'line',
     data:{ labels, datasets:[{
