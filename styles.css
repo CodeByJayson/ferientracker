@@ -121,6 +121,29 @@
 
   h1{ font-size:2.2rem; margin-bottom:4px; }
   #current-date{ color:var(--text-muted); font-size:0.95rem; }
+  .school-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 28px;
+  border-radius: 9999px;
+  
+  /* Sanftes, positives Blau */
+  background: rgba(14, 165, 233, 0.12);
+  border: 1px solid rgba(14, 165, 233, 0.4);
+  color: #8bdcff;
+  
+  /* Typografie */
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  font-variant-numeric: tabular-nums; /* Verhindert das Wackeln der Zahlen */
+  
+  /* Dezenter Schatten für Tiefe */
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.15);
+  backdrop-filter: blur(8px);
+}
 
   /* Tabs */
   .tabs{
@@ -171,6 +194,13 @@
     margin-bottom:20px;
     box-shadow:0 10px 15px -3px rgba(0,0,0,.3);
   }
+
+  .goals-card{
+    background:linear-gradient(135deg, rgba(245,158,11,.14), var(--card-bg) 60%);
+    border:1px solid rgba(245,158,11,.5);
+    box-shadow:0 10px 20px -3px rgba(245,158,11,.15);
+  }
+  .goals-card h2{ color:#fbbf24; }
 
   h2{ margin-top:0; margin-bottom:18px; font-size:1.2rem; font-weight:600; letter-spacing:-0.025em; display:flex; align-items:center; gap:8px; }
 
@@ -658,14 +688,3 @@
   }
   .math-check-row input[type="checkbox"]{ width:22px; height:22px; accent-color:var(--study-color); cursor:pointer; }
   .math-check-row .math-label{ font-weight:600; flex:1; }
-
-
-
-  .card.goals {
-    background: rgba(0, 128, 0, 0.123);
-    border: 2px solid green;
-  }
-  .btn.goals {
-    background: rgb(0, 128, 0);
-    border: 2px solid green;
-  }
