@@ -47,42 +47,23 @@ document.getElementById('current-date').innerText = new Date().toLocaleDateStrin
   weekday:'long', year:'numeric', month:'long', day:'numeric'
 });
 
-/* Live-Countdown bis Schulbeginn (17. August) */
-function renderSchoolCountdown() {
-  const now = new Date();
-  let schoolStart = new Date(now.getFullYear(), 7, 17, 0, 0, 0); // Monat 7 = August (0-indexiert)
-
-  // Falls der 17. August dieses Jahr schon vorbei ist, nimm das nächste Jahr
-  if (schoolStart < now) {
-    schoolStart = new Date(now.getFullYear() + 1, 7, 17, 0, 0, 0);
+/* Countdown bis Schulbeginn (17. August) */
+function renderSchoolCountdown(){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  let schoolStart = new Date(today.getFullYear(), 7, 17); // Monat 7 = August (0-indexiert)
+  if(schoolStart < today){
+    schoolStart = new Date(today.getFullYear() + 1, 7, 17);
   }
-
-  const diffMs = schoolStart - now;
+  const diffDays = Math.round((schoolStart - today) / 86400000);
   const el = document.getElementById('school-countdown');
-
-  if (!el) return;
-
-  if (diffMs <= 0) {
+  if(diffDays === 0){
     el.innerText = '📚 Heute geht die Schule wieder los!';
-    return;
+  } else {
+    el.innerText = `📚 Noch ${diffDays} Tag${diffDays===1?'':'e'} bis Schulbeginn (17. August)`;
   }
-
-  // Umrechnung der Verbleibenden Millisekunden
-  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-  const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
-
-  // Formatierung für saubere Textausgabe
-  el.innerText = `📚 Noch ${days} Tag${days === 1 ? '' : 'e'}, ` +
-                 `${hours} Std., ${minutes} Min. und ${seconds} Sek. bis Schulbeginn`;
 }
-
-// Erster Aufruf sofort beim Laden
 renderSchoolCountdown();
-
-// Jede Sekunde (1000 ms) aktualisieren
-setInterval(renderSchoolCountdown, 1000);
 
 /* Streak: count consecutive days (including today or yesterday) present as keys in a history object */
 function computeStreak(historyObj){
@@ -766,8 +747,150 @@ function renderFahr(){
 
   checkCelebration('fahr', percent);
 
+  renderFahrExam();
+  renderFahrSimulations();
+
   saveFahrData();
   updateFahrChart();
+}
+
+/* Nächsten Dienstag 13:30 Uhr berechnen - Standardvorschlag für den Prüfungstermin,
+   falls noch keiner gespeichert ist. */
+function computeNextTuesday1330(){
+  const now = new Date();
+  const day = now.getDay(); // 0=So..6=Sa, Dienstag=2
+  let daysUntilTuesday = (2 - day + 7) % 7;
+  if(daysUntilTuesday === 0){
+    const todayAt1330 = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 30);
+    if(now > todayAt1330) daysUntilTuesday = 7;
+  }
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + daysUntilTuesday, 13, 30);
+}
+
+function formatDatetimeLocal(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}T${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
+}
+
+function renderFahrExam(){
+  if(!fahrData.examDate){
+    fahrData.examDate = formatDatetimeLocal(computeNextTuesday1330());
+  }
+  document.getElementById('fahr-exam-date').value = fahrData.examDate;
+
+  const examDateObj = new Date(fahrData.examDate);
+  const now = new Date();
+  const diffMs = examDateObj - now;
+
+  const countdownEl = document.getElementById('fahr-exam-countdown');
+  const paceEl = document.getElementById('fahr-exam-pace');
+
+  if(diffMs <= 0){
+    countdownEl.innerText = '🎓 Der Prüfungstermin ist da (oder vorbei) - viel Erfolg!';
+    paceEl.innerText = '';
+    return;
+  }
+
+  const totalHours = Math.floor(diffMs / 3600000);
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  countdownEl.innerText = `⏰ Noch ${days} Tag${days===1?'':'e'} und ${hours} Stunde${hours===1?'':'n'} bis zur Prüfung`;
+
+  const daysLeftForPace = Math.max(1, Math.ceil(diffMs / 86400000));
+  const remaining = Math.max(0, fahrData.total - fahrData.done);
+  const perDay = Math.ceil(remaining / daysLeftForPace);
+  paceEl.innerText = remaining > 0
+    ? `Um alle Fragen bis dahin einmal durchzuhaben: ca. ${perDay} Fragen/Tag nötig`
+    : '🎉 Du hast schon alle Fragen einmal durch!';
+}
+
+function saveFahrExamDate(){
+  const val = document.getElementById('fahr-exam-date').value;
+  if(!val){
+    alert('Bitte gib Datum und Uhrzeit der Prüfung ein.');
+    return;
+  }
+  fahrData.examDate = val;
+  renderFahrExam();
+  saveFahrData();
+}
+
+const FAHR_SIM_DAILY_GOAL = 3;
+const FAHR_SIM_PASS_THRESHOLD = 10; // Fehlerpunkte-Grenze (Klasse B Richtwert) - bei Bedarf anpassen
+
+function addFahrSimulation(){
+  const errorsInput = document.getElementById('fahr-sim-errors');
+  const raw = errorsInput.value;
+  const errorPoints = parseInt(raw);
+
+  if(isNaN(errorPoints) || errorPoints < 0){
+    alert('Bitte gib eine gültige Anzahl an Fehlerpunkten ein (0 oder mehr).');
+    return;
+  }
+
+  if(!fahrData.simulations) fahrData.simulations = [];
+  fahrData.simulations.push({ date: getTodayKey(), errorPoints });
+  errorsInput.value = '';
+  renderFahrSimulations();
+  saveFahrData();
+}
+
+function renderFahrSimulations(){
+  const sims = fahrData.simulations || [];
+  const todayKey = getTodayKey();
+
+  // Nur Einträge mit gültigen Fehlerpunkten zählen (falls alte Einträge noch "score" haben)
+  const withPoints = sims.filter(s => typeof s.errorPoints === 'number');
+  const avgPoints = withPoints.length
+    ? (withPoints.reduce((sum, s) => sum + s.errorPoints, 0) / withPoints.length).toFixed(1)
+    : null;
+  const passedCount = withPoints.filter(s => s.errorPoints <= FAHR_SIM_PASS_THRESHOLD).length;
+  const passRate = withPoints.length ? Math.round((passedCount / withPoints.length) * 100) : null;
+
+  document.getElementById('fahr-sim-stats').innerHTML = `
+    <div class="stat-box"><div class="num">${sims.length}</div><div class="label">Simulationen gesamt</div></div>
+    <div class="stat-box"><div class="num">${avgPoints !== null ? avgPoints : '–'}</div><div class="label">Ø Fehlerpunkte</div></div>
+    <div class="stat-box"><div class="num">${passRate !== null ? passRate + '%' : '–'}</div><div class="label">Bestanden-Quote</div></div>
+  `;
+
+  // Tagesziel: mind. 3 Simulationen heute
+  const todayCount = sims.filter(s => s.date === todayKey).length;
+  const percent = Math.min(100, Math.round((todayCount / FAHR_SIM_DAILY_GOAL) * 100));
+  document.getElementById('fahr-sim-daily-bar').style.width = percent + '%';
+  document.getElementById('fahr-sim-daily-text').innerText = todayCount >= FAHR_SIM_DAILY_GOAL
+    ? `🎉 Tagesziel erreicht! (${todayCount} / ${FAHR_SIM_DAILY_GOAL})`
+    : `${todayCount} / ${FAHR_SIM_DAILY_GOAL} heute`;
+
+  // Streak: Tage mit mind. 3 Simulationen
+  const dailyCounts = {};
+  sims.forEach(s => { dailyCounts[s.date] = (dailyCounts[s.date] || 0) + 1; });
+  const qualifyingDays = {};
+  Object.entries(dailyCounts).forEach(([date, count]) => {
+    if(count >= FAHR_SIM_DAILY_GOAL) qualifyingDays[date] = 1;
+  });
+  const streak = computeStreak(qualifyingDays);
+  document.getElementById('fahr-sim-streak-badge').innerHTML = streak > 0
+    ? `<div class="streak-badge">🔥 ${streak} Tag${streak===1?'':'e'} mit mind. ${FAHR_SIM_DAILY_GOAL} Simulationen</div>`
+    : '';
+
+  const list = document.getElementById('fahr-sim-list');
+  if(sims.length === 0){
+    list.innerHTML = '<p class="empty-state">Noch keine Simulation eingetragen.</p>';
+    return;
+  }
+
+  const sorted = sims.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  list.innerHTML = sorted.map(s => {
+    const [y, m, d] = s.date.split('-');
+    const hasPoints = typeof s.errorPoints === 'number';
+    const passed = hasPoints && s.errorPoints <= FAHR_SIM_PASS_THRESHOLD;
+    return `
+      <div class="todo-item">
+        <span class="todo-text">${d}.${m}.${y}</span>
+        ${hasPoints ? `<span class="recurring-badge">${s.errorPoints} Fehlerpunkte</span>` : ''}
+        ${hasPoints ? `<span class="recurring-badge" style="${passed ? 'background:rgba(34,197,94,.12); color:#86efac;' : 'background:rgba(239,68,68,.12); color:#fca5a5;'}">${passed ? '✅ Bestanden' : '❌ Nicht bestanden'}</span>` : ''}
+      </div>
+    `;
+  }).join('');
 }
 
 function saveFahrTotal(){
