@@ -164,19 +164,6 @@
     </div>
 
     <div class="card">
-      <h2>⏰ Prüfungstermin</h2>
-      <div class="form-group">
-        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:200px;">
-          <label style="font-size:12px; color:var(--text-muted);">Datum & Uhrzeit der Prüfung</label>
-          <input type="datetime-local" id="fahr-exam-date">
-        </div>
-        <button onclick="saveFahrExamDate()">Speichern</button>
-      </div>
-      <div id="fahr-exam-countdown" class="daily-goal-label" style="margin-top:14px;"></div>
-      <div id="fahr-exam-pace" class="selected-date-label" style="margin-bottom:0;"></div>
-    </div>
-
-    <div class="card">
       <h2>🧪 Prüfungssimulationen</h2>
       <div id="fahr-sim-streak-badge"></div>
       <div id="fahr-sim-stats" class="stats-row"></div>
@@ -214,6 +201,19 @@
         <button class="chart-nav-btn" id="fahr-next-btn" onclick="shiftFahrChart(-1)">▶</button>
       </div>
       <div class="chart-container" id="fahr-chart-container"><canvas id="fahrChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>⏰ Prüfungstermin</h2>
+      <div class="form-group">
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:200px;">
+          <label style="font-size:12px; color:var(--text-muted);">Datum & Uhrzeit der Prüfung</label>
+          <input type="datetime-local" id="fahr-exam-date">
+        </div>
+        <button onclick="saveFahrExamDate()">Speichern</button>
+      </div>
+      <div id="fahr-exam-countdown" class="daily-goal-label" style="margin-top:14px;"></div>
+      <div id="fahr-exam-pace" class="selected-date-label" style="margin-bottom:0;"></div>
     </div>
   </div>
 
