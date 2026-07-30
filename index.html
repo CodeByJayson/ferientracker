@@ -164,6 +164,35 @@
     </div>
 
     <div class="card">
+      <h2>⏰ Prüfungstermin</h2>
+      <div class="form-group">
+        <div style="display:flex; flex-direction:column; gap:4px; flex:1; min-width:200px;">
+          <label style="font-size:12px; color:var(--text-muted);">Datum & Uhrzeit der Prüfung</label>
+          <input type="datetime-local" id="fahr-exam-date">
+        </div>
+        <button onclick="saveFahrExamDate()">Speichern</button>
+      </div>
+      <div id="fahr-exam-countdown" class="daily-goal-label" style="margin-top:14px;"></div>
+      <div id="fahr-exam-pace" class="selected-date-label" style="margin-bottom:0;"></div>
+    </div>
+
+    <div class="card">
+      <h2>🧪 Prüfungssimulationen</h2>
+      <div id="fahr-sim-streak-badge"></div>
+      <div id="fahr-sim-stats" class="stats-row"></div>
+      <div class="daily-goal-label">Tagesziel: mind. 3 Simulationen</div>
+      <div class="progress-container daily-goal-container">
+        <div class="progress-bar fahr-daily-bar" id="fahr-sim-daily-bar"></div>
+        <div class="progress-text" id="fahr-sim-daily-text"></div>
+      </div>
+      <div class="form-group" style="margin-top:14px;">
+        <input type="number" id="fahr-sim-errors" placeholder="Fehlerpunkte" min="0">
+        <button onclick="addFahrSimulation()">Simulation eintragen</button>
+      </div>
+      <div id="fahr-sim-list" style="margin-top:14px;"></div>
+    </div>
+
+    <div class="card">
       <h2>➕ Fragen geübt</h2>
       <div class="form-group" style="margin-bottom:12px;">
         <button class="quick" onclick="addFahrDone(1)">+1</button>
