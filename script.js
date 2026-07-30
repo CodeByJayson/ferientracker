@@ -48,22 +48,37 @@ document.getElementById('current-date').innerText = new Date().toLocaleDateStrin
 });
 
 /* Countdown bis Schulbeginn (17. August) */
-function renderSchoolCountdown(){
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  let schoolStart = new Date(today.getFullYear(), 7, 17); // Monat 7 = August (0-indexiert)
-  if(schoolStart < today){
-    schoolStart = new Date(today.getFullYear() + 1, 7, 17);
+function renderSchoolCountdown() {
+  const now = new Date(); // Aktuelle Zeit inklusive Stunden und Minuten
+  let schoolStart = new Date(now.getFullYear(), 7, 17, 0, 0, 0); // 17. August, 00:00 Uhr
+
+  // Wenn der 17. August dieses Jahres schon vorbei ist, nimm das nächste Jahr
+  if (schoolStart < now) {
+    schoolStart = new Date(now.getFullYear() + 1, 7, 17, 0, 0, 0);
   }
-  const diffDays = Math.round((schoolStart - today) / 86400000);
+
+  // Differenz in Millisekunden
+  const diffMs = schoolStart - now;
+
   const el = document.getElementById('school-countdown');
-  if(diffDays === 0){
+
+  if (diffMs <= 0) {
     el.innerText = '📚 Heute geht die Schule wieder los!';
   } else {
-    el.innerText = `📚 Noch ${diffDays} Tag${diffDays===1?'':'e'} bis Schulbeginn (17. August)`;
+    // Umrechnung der Millisekunden in Tage, Stunden und Minuten
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    el.innerText = `📚 Noch ${days} Tag${days === 1 ? '' : 'e'}, ${hours} Std. und ${minutes} Min. bis Schulbeginn (17. August)`;
   }
 }
+
+// Initial ausführen
 renderSchoolCountdown();
+
+// Jede Minute (60.000 ms) automatisch aktualisieren
+setInterval(renderSchoolCountdown, 60000);
 
 /* Streak: count consecutive days (including today or yesterday) present as keys in a history object */
 function computeStreak(historyObj){
