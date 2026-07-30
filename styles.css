@@ -121,17 +121,20 @@
 
   h1{ font-size:2.2rem; margin-bottom:4px; }
   #current-date{ color:var(--text-muted); font-size:0.95rem; }
-  .school-countdown{
-    display:inline-block;
-    margin-top:8px;
-    padding:6px 16px;
-    border-radius:9999px;
-    background:rgba(244,63,94,.12);
-    border:1px solid rgba(244,63,94,.4);
-    color:#fda4af;
-    font-size:13px;
-    font-weight:700;
-  }
+  .school-countdown {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 8px 18px; /* Leicht vergrößert für bessere Abstände */
+  border-radius: 9999px;
+  
+  /* Farben angepasst (hier: Blau statt Rot) */
+  background: rgba(59, 130, 246, 0.12); /* Zartes Blau im Hintergrund */
+  border: 1px solid rgba(59, 130, 246, 0.4);  /* Blauer Rahmen */
+  color: #93c5fd;                        /* Hellblaue Textfarbe */
+  
+  font-size: 15px; /* Vorher 13px – jetzt etwas größer */
+  font-weight: 700;
+}
 
   /* Tabs */
   .tabs{
