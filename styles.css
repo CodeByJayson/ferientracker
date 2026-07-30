@@ -121,29 +121,17 @@
 
   h1{ font-size:2.2rem; margin-bottom:4px; }
   #current-date{ color:var(--text-muted); font-size:0.95rem; }
-  .school-countdown {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 16px;
-  padding: 12px 28px;
-  border-radius: 9999px;
-  
-  /* Sanftes, positives Blau */
-  background: rgba(14, 165, 233, 0.12);
-  border: 1px solid rgba(14, 165, 233, 0.4);
-  color: #8bdcff;
-  
-  /* Typografie */
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  font-variant-numeric: tabular-nums; /* Verhindert das Wackeln der Zahlen */
-  
-  /* Dezenter Schatten für Tiefe */
-  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.15);
-  backdrop-filter: blur(8px);
-}
+  .school-countdown{
+    display:inline-block;
+    margin-top:8px;
+    padding:6px 16px;
+    border-radius:9999px;
+    background:rgba(244,63,94,.12);
+    border:1px solid rgba(244,63,94,.4);
+    color:#fda4af;
+    font-size:13px;
+    font-weight:700;
+  }
 
   /* Tabs */
   .tabs{
