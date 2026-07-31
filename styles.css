@@ -504,7 +504,7 @@
     font-size:13px;
   }
   .habit-item .relapse-btn:hover{ background-color:var(--danger-color); color:white; }
-
+ 
   .habit-order-btns{ display:flex; flex-direction:column; gap:2px; }
   .habit-order-btns button{
     background:#334155;
@@ -520,7 +520,7 @@
   }
   .habit-order-btns button:hover{ background:#3f4e68; }
   .habit-order-btns button:disabled{ opacity:.3; cursor:default; }
-
+ 
   .habit-item .habit-time{
     font-size:12px;
     color:var(--text-muted);
@@ -530,7 +530,7 @@
     border-radius:8px;
     white-space:nowrap;
   }
-
+ 
   .habit-item .edit-btn{
     background-color:transparent;
     color:var(--text-muted);
@@ -540,7 +540,7 @@
     font-size:13px;
   }
   .habit-item .edit-btn:hover{ background:#334155; color:var(--text-main); }
-
+ 
   .habit-item .joker-btn{
     background-color:transparent;
     color:#c4b5fd;
@@ -551,7 +551,7 @@
   }
   .habit-item .joker-btn:hover{ background-color:var(--habit-color); color:white; }
   .habit-item .joker-btn:disabled{ opacity:.3; cursor:default; background:transparent; color:var(--text-muted); border-color:var(--border-color); }
-
+ 
   .habit-edit-form{
     display:flex;
     gap:10px;
@@ -561,7 +561,7 @@
   }
   .habit-edit-form input[type="text"]{ flex:1; min-width:140px; }
   .habit-edit-form input[type="time"]{ max-width:120px; }
-
+ 
   /* Training / GTG */
   .gtg-today-highlight{
     background:rgba(244,63,94,.1);
@@ -577,7 +577,7 @@
     margin-bottom:4px;
   }
   .gtg-today-highlight .gtg-day-text{ font-size:14px; color:var(--text-main); line-height:1.5; }
-
+ 
   .gtg-week-plan{
     display:grid;
     grid-template-columns:1fr;
@@ -598,7 +598,7 @@
     font-weight:600;
   }
   .gtg-week-plan .gtg-day-name{ min-width:90px; flex-shrink:0; font-weight:700; }
-
+ 
   .gtg-rules{
     font-size:13px;
     color:var(--text-muted);
@@ -608,7 +608,7 @@
   }
   .gtg-rules ul{ margin:8px 0 0 0; padding-left:20px; }
   .gtg-rules li{ margin-bottom:4px; }
-
+ 
   .gtg-goal-grid{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));
@@ -623,7 +623,7 @@
   .gtg-goal-col .gtg-goal-name{ font-weight:700; font-size:13px; margin-bottom:8px; }
   .gtg-goal-col label{ font-size:11px; color:var(--text-muted); display:block; margin-bottom:2px; }
   .gtg-goal-col input{ width:100%; margin-bottom:8px; }
-
+ 
   .gtg-exercise-row{
     display:flex;
     align-items:center;
@@ -638,7 +638,7 @@
   .gtg-exercise-row .gtg-exercise-name{ font-weight:700; min-width:120px; }
   .gtg-exercise-row .gtg-today-total{ font-size:12px; color:var(--text-muted); white-space:nowrap; }
   .gtg-exercise-row input[type="number"]{ max-width:110px; }
-
+ 
   /* Lernen: Karteikarten & Mathe */
   .flashcard-item{
     display:flex;
@@ -663,11 +663,11 @@
   }
   .flashcard-actions{ display:flex; gap:10px; flex-wrap:wrap; }
   .flashcard-actions button{ font-size:13px; padding:8px 14px; }
-  .flashcard-correct-btn{ background-color:#16a34a; }
-  .flashcard-correct-btn:hover{ background-color:#15803d; }
-  .flashcard-wrong-btn{ background:transparent; border:1px solid var(--danger-color); color:var(--danger-color); }
-  .flashcard-wrong-btn:hover{ background-color:var(--danger-color); color:white; }
-
+  .study-tab .flashcard-correct-btn{ background-color:#16a34a; }
+  .study-tab .flashcard-correct-btn:hover{ background-color:#15803d; }
+  .study-tab .flashcard-wrong-btn{ background:transparent; border:1px solid var(--danger-color); color:var(--danger-color); }
+  .study-tab .flashcard-wrong-btn:hover{ background-color:var(--danger-color); color:white; }
+ 
   .math-check-row{
     display:flex;
     align-items:center;
@@ -679,3 +679,4 @@
   }
   .math-check-row input[type="checkbox"]{ width:22px; height:22px; accent-color:var(--study-color); cursor:pointer; }
   .math-check-row .math-label{ font-weight:600; flex:1; }
+ 
